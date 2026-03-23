@@ -4,6 +4,7 @@ import { Camera, Wall, TextLabel } from '../engine/entities.js';
 
 export class ProjectManager {
     constructor() {
+        this.id = null;
         this.cameras = [];
         this.walls = [];
         this.labels = []; // New labels array
@@ -152,7 +153,10 @@ export class ProjectManager {
         if (userId) {
             try {
                 const { saveProjectToCloud } = await import('./supabase.js');
-                await saveProjectToCloud(data, userId);
+                const res = await saveProjectToCloud(data, userId, this.id);
+                if (res.data?.id) {
+                    this.id = res.data.id;
+                }
             } catch (err) {
                 console.error('Erro ao salvar na nuvem:', err);
             }
@@ -172,6 +176,7 @@ export class ProjectManager {
             this.saveState();
             const data = JSON.parse(json);
             
+            this.id = data.id || null;
             this.metadata = {
                 name: data.name || "Projeto sem título",
                 client: data.client || "",

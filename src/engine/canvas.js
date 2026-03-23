@@ -49,11 +49,28 @@ export class CanvasEngine {
     }
 
     resize() {
+        const dpr = window.devicePixelRatio || 1;
         const container = this.mainCanvas.parentElement;
-        this.mainCanvas.width = container.clientWidth;
-        this.mainCanvas.height = container.clientHeight;
-        this.bgCanvas.width = container.clientWidth;
-        this.bgCanvas.height = container.clientHeight;
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        if (width === 0 || height === 0) return;
+
+        this.mainCanvas.width = width * dpr;
+        this.mainCanvas.height = height * dpr;
+        this.mainCanvas.style.width = width + 'px';
+        this.mainCanvas.style.height = height + 'px';
+
+        this.bgCanvas.width = width * dpr;
+        this.bgCanvas.height = height * dpr;
+        this.bgCanvas.style.width = width + 'px';
+        this.bgCanvas.style.height = height + 'px';
+
+        this.ctx.resetTransform();
+        this.ctx.scale(dpr, dpr);
+        this.bgCtx.resetTransform();
+        this.bgCtx.scale(dpr, dpr);
+
         this.drawGrid();
         this.render();
     }
@@ -419,7 +436,7 @@ export class CanvasEngine {
 
             // Pinch-to-zoom: ratio relative to gesture start, applied to base zoom
             const ratio = dist / this.pinchDist;
-            const newZoom = Math.min(Math.max(this.pinchBaseZoom * ratio, 0.1), 5);
+            const newZoom = Math.min(Math.max(this.pinchBaseZoom * ratio, 0.1), 20);
 
             // Zoom toward pinch midpoint
             const midX = (points[0].x + points[1].x) / 2;
@@ -432,6 +449,8 @@ export class CanvasEngine {
             this.zoom = newZoom;
             this.offsetX = cmx - worldAtMid.x * this.zoom;
             this.offsetY = cmy - worldAtMid.y * this.zoom;
+
+            document.getElementById('hdr-zoom').textContent = `${Math.round(this.zoom * 100)}%`;
 
             // Pan: track midpoint movement
             if (this.lastMidX != null) {
@@ -609,7 +628,7 @@ export class CanvasEngine {
     onWheel(e) {
         e.preventDefault();
         const factor = e.deltaY < 0 ? 1.08 : 0.93;
-        const newZoom = Math.min(Math.max(0.1, this.zoom * factor), 5);
+        const newZoom = Math.min(Math.max(0.1, this.zoom * factor), 20);
         
         const rect = this.mainCanvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
@@ -629,8 +648,9 @@ export class CanvasEngine {
 
     drawGrid() {
         const ctx = this.bgCtx;
-        const w = this.bgCanvas.width;
-        const h = this.bgCanvas.height;
+        const dpr = window.devicePixelRatio || 1;
+        const w = this.bgCanvas.width / dpr;
+        const h = this.bgCanvas.height / dpr;
         ctx.clearRect(0, 0, w, h);
         
         const isLightTheme = document.body.classList.contains('light-theme');
@@ -700,7 +720,8 @@ export class CanvasEngine {
         if (!this.project) return;
         
         const ctx = this.ctx;
-        ctx.clearRect(0, 0, this.mainCanvas.width, this.mainCanvas.height);
+        // Use styled size for clearing because of ctx.scale
+        ctx.clearRect(0, 0, this.mainCanvas.width / (window.devicePixelRatio || 1), this.mainCanvas.height / (window.devicePixelRatio || 1));
         
         ctx.save();
         ctx.translate(this.offsetX, this.offsetY);

@@ -7,7 +7,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
 
-export async function saveProjectToCloud(projectData, userId) {
+export async function saveProjectToCloud(projectData, userId, projectId = null) {
     if (!supabase || !userId) {
         console.warn('Supabase not configured or User not logged in. Saving to localStorage.');
         localStorage.setItem('cftv_project_latest', JSON.stringify(projectData));
@@ -17,7 +17,7 @@ export async function saveProjectToCloud(projectData, userId) {
     const { data, error } = await supabase
         .from('projects')
         .upsert({ 
-            id: projectData.id || undefined,
+            id: projectId || undefined,
             name: projectData.name,
             data: projectData,
             user_id: userId,
