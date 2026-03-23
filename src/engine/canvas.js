@@ -105,7 +105,13 @@ export class CanvasEngine {
         const my = e.clientY - rect.top;
         const worldPos = this.c2w(mx, my);
 
-        if (e.button === 2) { // Right click pan
+        if (e.button === 2) { // Right click
+            if (this.isDrawingWall) {
+                this.isDrawingWall = false;
+                this.wallStart = null;
+                this.render();
+                return;
+            }
             this.isPanning = true;
             this.lastMouseX = e.clientX;
             this.lastMouseY = e.clientY;
@@ -324,15 +330,29 @@ export class CanvasEngine {
         // Current wall preview
         const tool = window.app.ui?.currentTool;
         if (tool === 'wall' && this.isDrawingWall && this.wallStart && this.mouseWorldPos) {
+            const dx = this.mouseWorldPos.x - this.wallStart.x;
+            const dy = this.mouseWorldPos.y - this.wallStart.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const meters = (dist / SCALE).toFixed(2);
+            const angle = Math.round(Math.atan2(dy, dx) * 180 / Math.PI);
+
             ctx.beginPath();
             ctx.moveTo(this.wallStart.x, this.wallStart.y);
             ctx.lineTo(this.mouseWorldPos.x, this.mouseWorldPos.y);
-            ctx.strokeStyle = 'rgba(71, 85, 105, 0.5)';
+            ctx.strokeStyle = 'rgba(71, 85, 105, 0.7)';
             ctx.lineWidth = 10 / this.zoom;
             ctx.lineCap = 'round';
             ctx.setLineDash([5 / this.zoom, 5 / this.zoom]);
             ctx.stroke();
             ctx.setLineDash([]);
+
+            // Draw Metrics Label
+            const midX = (this.wallStart.x + this.mouseWorldPos.x) / 2;
+            const midY = (this.wallStart.y + this.mouseWorldPos.y) / 2;
+            ctx.font = `600 ${12 / this.zoom}px "JetBrains Mono", monospace`;
+            ctx.fillStyle = '#e2e8f0';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${meters}m / ${angle}°`, midX, midY - 15 / this.zoom);
         }
 
         // Render Ruler
