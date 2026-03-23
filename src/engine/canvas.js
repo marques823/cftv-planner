@@ -141,6 +141,8 @@ export class CanvasEngine {
                 });
                 this.project.addCamera(newCam);
                 this.selectedEntity = { type: 'camera', index: this.project.cameras.length - 1, entity: newCam };
+                this.isRotatingNewCamera = true;
+                this.rotatingCamera = newCam;
                 window.app.ui.onEntitySelected(this.selectedEntity);
             }
         } else if (tool === 'wall') {
@@ -207,6 +209,25 @@ export class CanvasEngine {
             return;
         }
 
+        if (this.isRotatingNewCamera && this.rotatingCamera) {
+            const dx = worldPos.x - this.rotatingCamera.x;
+            const dy = worldPos.y - this.rotatingCamera.y;
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            this.rotatingCamera.rotation = Math.round(angle);
+            this.render();
+            
+            // Update inspector if open without full re-render
+            if (this.selectedEntity?.entity === this.rotatingCamera) {
+                const rotInput = document.querySelector('input[data-prop="rotation"]');
+                if (rotInput) {
+                    rotInput.value = this.rotatingCamera.rotation;
+                    const valSpan = rotInput.previousElementSibling?.querySelector('.val');
+                    if (valSpan) valSpan.textContent = `${this.rotatingCamera.rotation}°`;
+                }
+            }
+            return;
+        }
+
         if (this.isDrawingWall) {
             this.render(); // Need to draw preview
         }
@@ -215,6 +236,8 @@ export class CanvasEngine {
     onMouseUp(e) {
         this.isPanning = false;
         this.isDragging = false;
+        this.isRotatingNewCamera = false;
+        this.rotatingCamera = null;
     }
 
     onWheel(e) {
