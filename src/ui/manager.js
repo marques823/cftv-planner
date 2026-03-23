@@ -373,7 +373,9 @@ export class UIManager {
             case 's': this.setTool('select'); break;
             case 'w': this.setTool('wall'); break;
             case 'c': this.setTool('camera'); break;
+            case 'r': this.setTool('ruler'); break;
             case 'e': this.setTool('erase'); break;
+            case 'm': this.setTool('move'); break;
             case 'escape': 
                 this.setTool('select');
                 this.engine.selectedEntity = null;

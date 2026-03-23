@@ -149,7 +149,9 @@ export class Camera {
         if (den === 0) return null;
         const ua = ((p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x)) / den;
         const ub = ((p2.x - p1.x) * (p1.y - p3.y) - (p2.y - p1.y) * (p1.x - p3.x)) / den;
-        if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+        
+        // Use a small epsilon (0.01) to avoid self-intersection when camera is exactly on wall
+        if (ua > 0.01 && ua <= 1 && ub >= 0 && ub <= 1) {
             return {
                 x: p1.x + ua * (p2.x - p1.x),
                 y: p1.y + ua * (p2.y - p1.y),

@@ -120,8 +120,28 @@ export class CanvasEngine {
 
         const tool = window.app.ui.currentTool;
 
-        if (tool === 'select') {
-            // ... existing select logic ...
+        if (tool === 'select' || tool === 'move') {
+            const hit = this.getEntityAt(worldPos.x, worldPos.y);
+            this.selectedEntity = hit;
+            window.app.ui.onEntitySelected(hit);
+            
+            if (hit && tool === 'move') {
+                this.isDragging = true;
+                if (hit.type === 'camera') {
+                    this.dragOffset = {
+                        x: worldPos.x - hit.entity.x,
+                        y: worldPos.y - hit.entity.y
+                    };
+                } else if (hit.type === 'wall') {
+                    this.dragOffset = {
+                        x1: worldPos.x - hit.entity.x1,
+                        y1: worldPos.y - hit.entity.y1,
+                        x2: worldPos.x - hit.entity.x2,
+                        y2: worldPos.y - hit.entity.y2
+                    };
+                }
+            }
+            this.render();
         } else if (tool === 'ruler') {
             const sx = worldPos.x;
             const sy = worldPos.y;
@@ -193,11 +213,19 @@ export class CanvasEngine {
             return;
         }
 
-        if (this.isDragging && this.selectedEntity?.type === 'camera') {
-            const targetX = worldPos.x - this.dragOffset.x;
-            const targetY = worldPos.y - this.dragOffset.y;
-            this.selectedEntity.entity.x = this.snap(targetX);
-            this.selectedEntity.entity.y = this.snap(targetY);
+        if (this.isDragging && this.selectedEntity) {
+            if (this.selectedEntity.type === 'camera') {
+                const targetX = worldPos.x - this.dragOffset.x;
+                const targetY = worldPos.y - this.dragOffset.y;
+                this.selectedEntity.entity.x = this.snap(targetX);
+                this.selectedEntity.entity.y = this.snap(targetY);
+            } else if (this.selectedEntity.type === 'wall') {
+                const w = this.selectedEntity.entity;
+                w.x1 = this.snap(worldPos.x - this.dragOffset.x1);
+                w.y1 = this.snap(worldPos.y - this.dragOffset.y1);
+                w.x2 = this.snap(worldPos.x - this.dragOffset.x2);
+                w.y2 = this.snap(worldPos.y - this.dragOffset.y2);
+            }
             this.render();
             return;
         }
