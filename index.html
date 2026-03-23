@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>CFTV Planner Pro — Projetos Inteligentes</title>
     <link rel="stylesheet" href="/src/styles/main.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,6 +14,9 @@
         <!-- Dashboard Header -->
         <header class="app-header">
             <div class="header-left">
+                <button class="btn-ghost btn-icon btn-sidebar-toggle" id="btn-sidebar-toggle" title="Menu" aria-label="Abrir/fechar menu">
+                    <i data-lucide="menu"></i>
+                </button>
                 <div class="logo">
                   <span class="logo-icon">📡</span>
                   <div class="logo-text-group">
@@ -61,8 +64,11 @@
         </header>
 
         <main class="app-content">
+            <!-- Sidebar overlay (mobile drawer backdrop) -->
+            <div id="sidebar-overlay"></div>
+
             <!-- Sidebar Toolbar -->
-            <aside class="sidebar">
+            <aside class="sidebar" id="sidebar">
                 <nav class="toolbar">
                     <div class="tool-section">
                         <h3 class="section-title">Ferramentas</h3>
@@ -76,15 +82,56 @@
                             <button class="tool-btn" id="tool-wall" data-tool="wall" title="Parede (W)">
                                 <i data-lucide="pen-tool"></i>
                             </button>
+                            <button class="tool-btn" id="tool-door" data-tool="door" title="Porta (D)">
+                                <i data-lucide="door-open"></i>
+                            </button>
+                            <button class="tool-btn" id="tool-window" data-tool="window" title="Janela (J)">
+                                <i data-lucide="layout-panel-left"></i>
+                            </button>
                             <button class="tool-btn" id="tool-camera" data-tool="camera" title="Câmera (C)">
                                 <i data-lucide="camera"></i>
                             </button>
                             <button class="tool-btn" id="tool-ruler" data-tool="ruler" title="Régua (R)">
                                 <i data-lucide="ruler"></i>
                             </button>
+                            <button class="tool-btn" id="tool-text" data-tool="text" title="Texto (T)">
+                                <i data-lucide="type"></i>
+                            </button>
                             <button class="tool-btn" id="tool-erase" data-tool="erase" title="Apagar (E)">
                                 <i data-lucide="trash-2"></i>
                             </button>
+                        </div>
+                    </div>
+
+                    <div class="tool-section">
+                        <h3 class="section-title">Dados do Projeto</h3>
+                        <div class="settings-grid">
+                            <div class="setting-item full">
+                                <label>Título do Projeto</label>
+                                <input type="text" id="project-title" placeholder="Nome do Projeto">
+                            </div>
+                            <div class="setting-item">
+                                <label>Cliente</label>
+                                <input type="text" id="project-client" placeholder="Nome do Cliente">
+                            </div>
+                            <div class="setting-item">
+                                <label>Empresa</label>
+                                <input type="text" id="project-company" placeholder="Sua Empresa">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tool-section">
+                        <h3 class="section-title">Configurações</h3>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <label>Largura (m)</label>
+                                <input type="number" id="workspace-width" value="50">
+                            </div>
+                            <div class="setting-item">
+                                <label>Altura (m)</label>
+                                <input type="number" id="workspace-height" value="30">
+                            </div>
                         </div>
                     </div>
 
@@ -124,8 +171,13 @@
                 </div>
             </section>
 
-            <!-- Inspector Panel -->
             <aside class="inspector">
+                <div class="inspector-mobile-header">
+                    <span>Propriedades</span>
+                    <button class="btn-ghost btn-icon" onclick="window.app.engine.selectedEntity = null; window.app.ui.onEntitySelected(null)">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
                 <div class="inspector-section">
                     <h3 class="section-title">Propriedades</h3>
                     <div id="inspector-content" class="properties-panel">
@@ -169,6 +221,29 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script>
       lucide.createIcons();
+
+      // Mobile sidebar drawer toggle
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      const toggleBtn = document.getElementById('btn-sidebar-toggle');
+
+      function openSidebar() {
+        sidebar.classList.add('open');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeSidebar() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+
+      toggleBtn.addEventListener('click', () => {
+        sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+      });
+
+      overlay.addEventListener('click', closeSidebar);
     </script>
 </body>
 </html>

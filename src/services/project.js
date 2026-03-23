@@ -1,42 +1,117 @@
+import { saveProjectToCloud } from './supabase.js';
+import { HistoryManager } from './history.js';
+import { Camera, Wall, TextLabel } from '../engine/entities.js';
+
 export class ProjectManager {
     constructor() {
-        this.projectName = "Projeto sem título";
-        this.clientName = "";
-        this.address = "";
-        this.date = new Date().toISOString();
-        
         this.cameras = [];
         this.walls = [];
+        this.labels = []; // New labels array
+        this.metadata = {
+            name: "Projeto sem título",
+            client: "",
+            address: "",
+            company: "Sua Empresa",
+            contact: "seu-site.com.br",
+            date: new Date().toISOString()
+        };
+        this.settings = {
+            widthMeters: 50,
+            heightMeters: 30
+        };
+        this.history = new HistoryManager();
     }
 
-    addCamera(camera) {
-        this.cameras.push(camera);
+    updateMetadata(updates) {
+        this.saveState();
+        this.metadata = { ...this.metadata, ...updates };
+        this.notifyChange();
+    }
+
+    saveState() {
+        this.history.push({
+            cameras: JSON.parse(JSON.stringify(this.cameras)),
+            walls: JSON.parse(JSON.stringify(this.walls)),
+            labels: JSON.parse(JSON.stringify(this.labels)),
+            settings: JSON.parse(JSON.stringify(this.settings))
+        });
+    }
+
+    undo() {
+        const state = this.history.undo({
+            cameras: JSON.parse(JSON.stringify(this.cameras)),
+            walls: JSON.parse(JSON.stringify(this.walls)),
+            labels: JSON.parse(JSON.stringify(this.labels)),
+            settings: JSON.parse(JSON.stringify(this.settings))
+        });
+        if (state) this.applyState(state);
+    }
+
+    redo() {
+        const state = this.history.redo({
+            cameras: JSON.parse(JSON.stringify(this.cameras)),
+            walls: JSON.parse(JSON.stringify(this.walls)),
+            labels: JSON.parse(JSON.stringify(this.labels)),
+            settings: JSON.parse(JSON.stringify(this.settings))
+        });
+        if (state) this.applyState(state);
+    }
+
+    applyState(state) {
+        this.loadFromJSON(JSON.stringify({ ...this.metadata, ...state }));
+        window.dispatchEvent(new CustomEvent('project-changed'));
+    }
+
+    // ... (rest of add/remove methods remain similar but ensure notifyChange is called)
+
+    addCamera(cam) {
+        this.saveState();
+        this.cameras.push(cam);
         this.notifyChange();
     }
 
     addWall(wall) {
+        this.saveState();
         this.walls.push(wall);
         this.notifyChange();
     }
 
     removeCamera(index) {
+        this.saveState();
         this.cameras.splice(index, 1);
         this.notifyChange();
     }
 
     removeWall(index) {
+        this.saveState();
         this.walls.splice(index, 1);
         this.notifyChange();
     }
 
+    addLabel(label) {
+        this.saveState();
+        this.labels.push(label);
+        this.notifyChange();
+    }
+
+    removeLabel(index) {
+        this.saveState();
+        this.labels.splice(index, 1);
+        this.notifyChange();
+    }
+
     clear() {
+        this.saveState();
         this.cameras = [];
         this.walls = [];
+        this.labels = [];
         this.notifyChange();
     }
 
     notifyChange() {
-        // Dispatch event or call callbacks
+        // Auto-save to localStorage
+        localStorage.setItem('cftv_project_latest', this.toJSON());
+        
         const event = new CustomEvent('project-changed', { 
             detail: { 
                 cameraCount: this.cameras.length,
@@ -64,14 +139,14 @@ export class ProjectManager {
 
     toJSON() {
         return JSON.stringify({
-            name: this.projectName,
-            client: this.clientName,
-            address: this.address,
-            date: this.date,
+            ...this.metadata,
             cameras: this.cameras,
-            walls: this.walls
+            walls: this.walls,
+            labels: this.labels,
+            settings: this.settings
         });
     }
+
     async save(userId = null) {
         const data = JSON.parse(this.toJSON());
         if (userId) {
@@ -80,25 +155,42 @@ export class ProjectManager {
                 await saveProjectToCloud(data, userId);
             } catch (err) {
                 console.error('Erro ao salvar na nuvem:', err);
-                localStorage.setItem('cftv_project_latest', JSON.stringify(data));
             }
-        } else {
-            localStorage.setItem('cftv_project_latest', JSON.stringify(data));
         }
+        localStorage.setItem('cftv_project_latest', JSON.stringify(data));
+        this.notifyChange();
+    }
+
+    updateSettings(newSettings) {
+        this.saveState();
+        this.settings = { ...this.settings, ...newSettings };
         this.notifyChange();
     }
 
     loadFromJSON(json) {
-        const data = JSON.parse(json);
-        this.projectName = data.name || "Projeto sem título";
-        this.clientName = data.client || "";
-        this.address = data.address || "";
-        this.date = data.date || new Date().toISOString();
-        
-        // Convert to class instances if needed
-        this.cameras = data.cameras || [];
-        this.walls = data.walls || [];
-        
-        this.notifyChange();
+        try {
+            this.saveState();
+            const data = JSON.parse(json);
+            
+            this.metadata = {
+                name: data.name || "Projeto sem título",
+                client: data.client || "",
+                address: data.address || "",
+                company: data.company || "Sua Empresa",
+                contact: data.contact || "seu-site.com.br",
+                date: data.date || new Date().toISOString()
+            };
+            
+            this.settings = data.settings || { widthMeters: 50, heightMeters: 30 };
+            
+            this.cameras = (data.cameras || []).map(c => new Camera(c));
+            this.walls = (data.walls || []).map(w => new Wall(w.x1, w.y1, w.x2, w.y2, w.color, w.showMeasurements, w.elements));
+            this.labels = (data.labels || []).map(l => new TextLabel(l));
+            this.labels = (data.labels || []).map(l => new TextLabel(l));
+            
+            this.notifyChange();
+        } catch (e) {
+            console.error("Failed to load project:", e);
+        }
     }
 }

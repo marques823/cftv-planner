@@ -19,4 +19,5 @@ export const CATALOG = [
     { id: 'gen-bullet-hd', brand: 'Genérico', name: 'Bullet HD', type: 'Bullet', icon: '⚪', fov: 78, range: 20, res: '1080p', ir: '20m', color: '150,200,220', desc: '1080p · 78° · IR 20m' },
     { id: 'gen-dome-hd', brand: 'Genérico', name: 'Dome HD', type: 'Dome', icon: '⚪', fov: 100, range: 12, res: '1080p', ir: '12m', color: '150,220,150', desc: '1080p · 100° · IR 12m' },
     { id: 'gen-mini-dome', brand: 'Genérico', name: 'Mini Dome', type: 'Dome', icon: '⚪', fov: 110, range: 8, res: '720p', ir: '8m', color: '200,200,200', desc: '720p · 110° · IR 8m' },
+    { id: 'gen-custom', brand: 'Genérico', name: 'Câmera Customizável', type: 'Configurável', icon: '⚙️', fov: 90, range: 30, res: 'Custom', ir: 'Custom', color: '200,200,200', desc: '90° default · Alcance 30m' },
 ];

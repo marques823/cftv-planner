@@ -74,7 +74,9 @@ body {
 .logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .logo-icon {
@@ -82,12 +84,13 @@ body {
 }
 
 .logo-title {
-  font-size: 18px;
+  font-size: clamp(12px, 2.5vw, 18px);
   font-weight: 700;
   letter-spacing: 0.5px;
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
 }
 
 .badge {
@@ -129,16 +132,48 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.divider {
+.divider, .toolbar-divider {
   width: 1px;
   height: 24px;
   background: var(--border);
+  margin: 0 4px;
+}
+
+.color-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.color-opt {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.2s, border-color 0.2s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.color-opt:hover {
+  transform: scale(1.15);
+  border-color: #fff;
 }
 
 /* Buttons */
@@ -263,6 +298,33 @@ canvas {
   gap: 8px;
 }
 
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.setting-item label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.setting-item input {
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
 .tool-btn {
   aspect-ratio: 1;
   background: var(--bg-card);
@@ -321,7 +383,6 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 400px;
   overflow-y: auto;
 }
 
@@ -576,9 +637,182 @@ canvas {
   justify-content: flex-end;
 }
 
-.w-full { width: 100%; }
-.hidden { display: none !important; }
-
-/* Utilities */
 .w-full { width: 100% !important; }
 .hidden { display: none !important; }
+
+/* ─── Hamburger toggle — desktop hide, mobile show ─── */
+.btn-sidebar-toggle {
+  display: none;
+}
+
+/* ─── Mobile sidebar overlay (drawer backdrop) ─── */
+#sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 199;
+  backdrop-filter: blur(2px);
+}
+
+#sidebar-overlay.active {
+  display: block;
+}
+/* ─── Mobile Layout — Off-Canvas Drawer ─── */
+@media (max-width: 768px) {
+
+  /* Hamburger visible on mobile */
+  .btn-sidebar-toggle {
+    display: flex;
+  }
+
+  /* Header shrink to save vertical space */
+  .app-header {
+    padding: 0 12px;
+    height: 52px;
+  }
+
+  /* Hide logo subtitle and stats on small screens */
+  .logo-subtitle,
+  .header-center {
+    display: none;
+  }
+
+  /* Content area: flex row so canvas takes full remaining space */
+  .app-content {
+    display: flex;
+    position: relative;
+    width: 100%;
+    height: calc(100dvh - 52px - var(--footer-height));
+    overflow: hidden;
+  }
+
+  /* Canvas fills 100% of the available flex space */
+  .canvas-container {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Sidebar: hidden off-screen to the left by default */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(85vw, 320px);
+    height: 100%;
+    max-height: 100%;
+    z-index: 200;
+    background: rgba(15, 23, 42, 0.97);
+    backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 4px 0 32px rgba(0, 0, 0, 0.6);
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Sidebar open state */
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Inspector: floating bottom sheet when active */
+  .inspector {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 55vh;
+    z-index: 200;
+    background: rgba(15, 23, 42, 0.97);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.7);
+    display: none;
+    flex-direction: column;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .inspector.active {
+    display: flex;
+    transform: translateY(0);
+  }
+
+  /* Mobile inspector header */
+  .inspector-mobile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-weight: 600;
+  }
+
+  .inspector-section .section-title {
+    display: none;
+  }
+
+  /* Condense action buttons text on mobile */
+  .btn-primary span,
+  .btn-secondary span {
+    display: none;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 8px;
+  }
+}
+
+.btn-icon {
+    padding: 8px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.inspector-mobile-header {
+  display: none;
+}
+
+/* Touch targets for coarse pointers (S Pen / Finger) */
+@media (pointer: coarse) {
+  .tool-btn {
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+  }
+
+  .btn-icon {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+  }
+
+  .catalog-item {
+    padding: 16px;
+  }
+}
+
+.btn-icon {
+    padding: 6px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon:hover {
+    background: var(--bg-hover);
+}

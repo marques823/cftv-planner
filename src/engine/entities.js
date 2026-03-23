@@ -163,30 +163,222 @@ export class Camera {
 }
 
 export class Wall {
-    constructor(x1, y1, x2, y2) {
+    constructor(x1, y1, x2, y2, color = '#1e293b', showMeasurements = false, elements = []) {
         this.x1 = x1;
         this.y1 = y1;
         this.x2 = x2;
         this.y2 = y2;
+        this.color = color;
+        this.showMeasurements = showMeasurements;
+        this.elements = elements || [];
     }
 
-    draw(ctx, zoom) {
-        // Outer wall (shadow/thickness)
+    draw(ctx, zoom, isSelected) {
+        // Build inner highlight color from base color if custom
+        const isCustom = this.color !== '#1e293b';
+        const innerColor = isCustom ? this.color : '#475569';
+        const shadowColor = isSelected ? '#3b82f6' : this.color;
+
+        const dx = this.x2 - this.x1;
+        const dy = this.y2 - this.y1;
+        const len = Math.sqrt(dx * dx + dy * dy);
+
+        // Sort elements by 't'
+        const elems = [...this.elements].sort((a,b) => a.t - b.t);
+
+        // Calculate segment t ranges to leave holes for doors and windows
+        const segments = [];
+        let curT = 0;
+        for (const el of elems) {
+            const elHalfT = ((el.width * 10) / 2) / len;
+            const tStart = Math.max(curT, el.t - elHalfT);
+            if (tStart > curT) {
+                segments.push([curT, tStart]);
+            }
+            curT = Math.min(1, el.t + elHalfT);
+        }
+        if (curT < 1) segments.push([curT, 1]);
+
+        // Draw outer wall segments (shadow/thickness)
         ctx.beginPath();
-        ctx.moveTo(this.x1, this.y1);
-        ctx.lineTo(this.x2, this.y2);
-        ctx.strokeStyle = '#1e293b';
+        for (const [t1, t2] of segments) {
+            ctx.moveTo(this.x1 + t1 * dx, this.y1 + t1 * dy);
+            ctx.lineTo(this.x1 + t2 * dx, this.y1 + t2 * dy);
+        }
+        ctx.strokeStyle = shadowColor;
         ctx.lineWidth = 10 / zoom;
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt'; // 'butt' is better for seamless segments than 'round' when split
         ctx.stroke();
 
-        // Inner wall (highlight)
+        // Draw inner wall segments (highlight)
         ctx.beginPath();
-        ctx.moveTo(this.x1, this.y1);
-        ctx.lineTo(this.x2, this.y2);
-        ctx.strokeStyle = '#475569';
+        for (const [t1, t2] of segments) {
+            ctx.moveTo(this.x1 + t1 * dx, this.y1 + t1 * dy);
+            ctx.lineTo(this.x1 + t2 * dx, this.y1 + t2 * dy);
+        }
+        ctx.strokeStyle = isSelected ? '#60a5fa' : innerColor;
         ctx.lineWidth = 2 / zoom;
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt';
         ctx.stroke();
+
+        // Draw doors and windows
+        for (const el of elems) {
+            const px = this.x1 + el.t * dx;
+            const py = this.y1 + el.t * dy;
+            let angle = Math.atan2(dy, dx);
+            
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(angle);
+            
+            const w = el.width * 10;
+            
+            if (el.type === 'door') {
+                // Jambs
+                ctx.beginPath();
+                ctx.moveTo(-w/2, -5/zoom); ctx.lineTo(-w/2, 5/zoom);
+                ctx.moveTo(w/2, -5/zoom); ctx.lineTo(w/2, 5/zoom);
+                ctx.strokeStyle = '#475569';
+                ctx.lineWidth = 2/zoom;
+                ctx.stroke();
+                
+                const dir = el.inverted ? 1 : -1;
+                const hingeX = el.mirrored ? w/2 : -w/2;
+                
+                // Door Leaf
+                ctx.beginPath();
+                ctx.moveTo(hingeX, 0);
+                ctx.lineTo(hingeX, w * dir);
+                ctx.strokeStyle = '#3b82f6';
+                ctx.stroke();
+                
+                // Swing Arc
+                ctx.beginPath();
+                let startAngle, endAngle;
+                if (!el.mirrored) {
+                    startAngle = el.inverted ? 0 : -Math.PI/2;
+                    endAngle = el.inverted ? Math.PI/2 : 0;
+                } else {
+                    startAngle = el.inverted ? Math.PI/2 : Math.PI;
+                    endAngle = el.inverted ? Math.PI : 1.5 * Math.PI;
+                }
+                ctx.arc(hingeX, 0, w, startAngle, endAngle);
+                ctx.strokeStyle = '#94a3b8';
+                ctx.setLineDash([4/zoom, 4/zoom]);
+                ctx.lineWidth = 1.5/zoom;
+                ctx.stroke();
+                
+            } else if (el.type === 'window') {
+                // Jambs
+                ctx.beginPath();
+                ctx.moveTo(-w/2, -5/zoom); ctx.lineTo(-w/2, 5/zoom);
+                ctx.moveTo(w/2, -5/zoom); ctx.lineTo(w/2, 5/zoom);
+                ctx.strokeStyle = '#475569';
+                ctx.lineWidth = 2/zoom;
+                ctx.stroke();
+                
+                // Glass panes (two parallel lines inside the thickness)
+                ctx.beginPath();
+                ctx.moveTo(-w/2, -2/zoom); ctx.lineTo(w/2, -2/zoom);
+                ctx.moveTo(-w/2, 2/zoom); ctx.lineTo(w/2, 2/zoom);
+                ctx.strokeStyle = '#a5f3fc';
+                ctx.lineWidth = 1.5/zoom;
+                ctx.stroke();
+                
+                // Fill faint blue
+                ctx.fillStyle = 'rgba(165, 243, 252, 0.2)';
+                ctx.fillRect(-w/2, -3/zoom, w, 6/zoom);
+            }
+            
+            ctx.restore();
+        }
+
+        // Endpoint handles — visible so user knows they can drag them
+        if (isSelected) {
+            const r = 7 / zoom;
+            [{ x: this.x1, y: this.y1 }, { x: this.x2, y: this.y2 }].forEach(pt => {
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+                ctx.fillStyle = '#0f172a';
+                ctx.fill();
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2 / zoom;
+                ctx.stroke();
+            });
+        }
+
+        // Handle measurements text
+        if (this.showMeasurements) {
+            const dx = this.x2 - this.x1;
+            const dy = this.y2 - this.y1;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const midX = (this.x1 + this.x2) / 2;
+            const midY = (this.y1 + this.y2) / 2;
+            
+            ctx.save();
+            ctx.translate(midX, midY);
+            let angle = Math.atan2(dy, dx);
+            if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
+                angle += Math.PI;
+            }
+            ctx.rotate(angle);
+            
+            const text = `${len.toFixed(2)}m`;
+            const fontSize = 12 / zoom;
+            ctx.font = `600 ${fontSize}px "Inter", sans-serif`;
+            const txtWidth = ctx.measureText(text).width;
+            
+            // Background pill for text
+            ctx.fillStyle = this.color === '#1e293b' ? '#0f172a' : this.color;
+            ctx.beginPath();
+            ctx.roundRect(-txtWidth / 2 - 4/zoom, -fontSize - 4/zoom, txtWidth + 8/zoom, fontSize + 8/zoom, 4/zoom);
+            ctx.fill();
+            
+            // Text
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 0, -fontSize / 2);
+            ctx.restore();
+        }
+    }
+}
+
+export class TextLabel {
+    constructor(config) {
+        this.id = config.id || Math.random().toString(36).substr(2, 9);
+        this.x = config.x;
+        this.y = config.y;
+        this.text = config.text || 'Texto';
+        this.fontSize = config.fontSize || 16;
+        this.color = config.color || '255,255,255';
+    }
+
+    draw(ctx, zoom, isSelected, isHovered) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        ctx.font = `600 ${this.fontSize / zoom}px "Inter", sans-serif`;
+        ctx.fillStyle = `rgb(${this.color})`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        if (isSelected || isHovered) {
+            ctx.fillStyle = isSelected ? '#3b82f6' : '#60a5fa';
+        }
+
+        ctx.fillText(this.text, 0, 0);
+
+        if (isSelected) {
+            const metrics = ctx.measureText(this.text);
+            const w = metrics.width + 10 / zoom;
+            const h = (this.fontSize / zoom) + 10 / zoom;
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1 / zoom;
+            ctx.setLineDash([5 / zoom, 5 / zoom]);
+            ctx.strokeRect(-w / 2, -h / 2, w, h);
+        }
+
+        ctx.restore();
     }
 }
