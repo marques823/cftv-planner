@@ -347,6 +347,8 @@ export class UIManager {
         container.querySelector('#close-modal').onclick = () => container.classList.add('hidden');
         lucide.createIcons();
     }
+
+    onKeyDown(e) {
         if (e.target.tagName === 'INPUT') return;
         
         switch(e.key.toLowerCase()) {
