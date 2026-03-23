@@ -1,5 +1,5 @@
-import { CATALOG } from './engine/catalog.js';
-import { AuthService } from './services/auth.js';
+import { CATALOG } from '../engine/catalog.js';
+import { AuthService } from '../services/auth.js';
 
 export class UIManager {
     constructor(engine, projects) {
