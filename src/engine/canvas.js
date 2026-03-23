@@ -383,7 +383,7 @@ export class CanvasEngine {
         // Render FOVs (underneath cameras)
         this.project.cameras.forEach((cam, i) => {
             const isSelected = this.selectedEntity?.type === 'camera' && this.selectedEntity.index === i;
-            cam.drawFOV(ctx, this.zoom, isSelected);
+            cam.drawFOV(ctx, this.zoom, isSelected, this.project.walls);
         });
 
         // Render cameras

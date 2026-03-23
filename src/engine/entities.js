@@ -76,49 +76,87 @@ export class Camera {
         ctx.restore();
     }
 
-    drawFOV(ctx, zoom, isSelected) {
+    drawFOV(ctx, zoom, isSelected, walls = []) {
         const rotRad = (this.rotation * Math.PI) / 180;
         const fovRad = (this.fov * Math.PI) / 180;
         const hf = fovRad / 2;
         const rangePx = this.range * SCALE;
         const c = this.color;
 
-        ctx.save();
-        ctx.translate(this.x, this.y);
+        const rays = 40; // Accuracy vs Performance
+        const step = fovRad / rays;
+        const points = [];
 
-        // Main cone
+        for (let i = 0; i <= rays; i++) {
+            const angle = (rotRad - hf) + (step * i);
+            const targetX = this.x + Math.cos(angle) * rangePx;
+            const targetY = this.y + Math.sin(angle) * rangePx;
+
+            let closestDist = 1;
+            let hitPoint = { x: targetX, y: targetY };
+
+            // Ray-Wall Intersection
+            walls.forEach(w => {
+                const intersect = this.getIntersection(
+                    { x: this.x, y: this.y },
+                    { x: targetX, y: targetY },
+                    { x: w.x1, y: w.y1 },
+                    { x: w.x2, y: w.y2 }
+                );
+                if (intersect && intersect.dist < closestDist) {
+                    closestDist = intersect.dist;
+                    hitPoint = { x: intersect.x, y: intersect.y };
+                }
+            });
+            points.push(hitPoint);
+        }
+
+        ctx.save();
+        
+        // Draw Main Occluded FOV
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(0, 0, rangePx, rotRad - hf, rotRad + hf);
+        ctx.moveTo(this.x, this.y);
+        points.forEach(p => ctx.lineTo(p.x, p.y));
         ctx.closePath();
-        ctx.fillStyle = `rgba(${c}, 0.08)`;
+        
+        ctx.fillStyle = `rgba(${c}, 0.1)`;
         ctx.fill();
 
         ctx.strokeStyle = `rgba(${c}, ${isSelected ? 0.6 : 0.3})`;
         ctx.lineWidth = (isSelected ? 1.5 : 1) / zoom;
         ctx.stroke();
 
-        // Distance markers
-        for (let r = 0.25; r <= 1.0; r += 0.25) {
-            ctx.beginPath();
-            ctx.arc(0, 0, rangePx * r, rotRad - hf, rotRad + hf);
-            ctx.strokeStyle = `rgba(${c}, 0.05)`;
-            ctx.lineWidth = 1 / zoom;
-            ctx.stroke();
+        // Distance markers (simplified occlusion)
+        if (isSelected) {
+            for (let r = 0.25; r < 1.0; r += 0.25) {
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                points.forEach(p => {
+                    const rx = this.x + (p.x - this.x) * r;
+                    const ry = this.y + (p.y - this.y) * r;
+                    ctx.lineTo(rx, ry);
+                });
+                ctx.strokeStyle = `rgba(${c}, 0.05)`;
+                ctx.stroke();
+            }
         }
 
-        // Limit lines (dashed)
-        ctx.setLineDash([5 / zoom, 5 / zoom]);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(rotRad - hf) * rangePx, Math.sin(rotRad - hf) * rangePx);
-        ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(rotRad + hf) * rangePx, Math.sin(rotRad + hf) * rangePx);
-        ctx.strokeStyle = `rgba(${c}, 0.3)`;
-        ctx.stroke();
-        ctx.setLineDash([]);
-
         ctx.restore();
+    }
+
+    getIntersection(p1, p2, p3, p4) {
+        const den = (p4.y - p3.y) * (p2.x - p1.x) - (p4.x - p3.x) * (p2.y - p1.y);
+        if (den === 0) return null;
+        const ua = ((p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x)) / den;
+        const ub = ((p2.x - p1.x) * (p1.y - p3.y) - (p2.y - p1.y) * (p1.x - p3.x)) / den;
+        if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+            return {
+                x: p1.x + ua * (p2.x - p1.x),
+                y: p1.y + ua * (p2.y - p1.y),
+                dist: ua
+            };
+        }
+        return null;
     }
 }
 

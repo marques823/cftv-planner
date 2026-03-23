@@ -151,6 +151,24 @@ export class UIManager {
             });
         });
 
+        // Set initial active color
+        pnl.querySelectorAll('.color-swatch').forEach(swatch => {
+            if (swatch.getAttribute('data-color') === cam.color) {
+                swatch.classList.add('active');
+            } else {
+                swatch.classList.remove('active');
+            }
+            
+            swatch.onclick = () => {
+                const color = swatch.getAttribute('data-color');
+                cam.color = color;
+                pnl.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                swatch.classList.add('active');
+                this.engine.render();
+                this.renderPlacedList();
+            };
+        });
+
         pnl.querySelector('#btn-delete-entity').onclick = () => {
             this.projects.removeCamera(hit.index);
             this.onEntitySelected(null);
