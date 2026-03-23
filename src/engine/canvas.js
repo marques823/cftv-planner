@@ -229,7 +229,9 @@ export class CanvasEngine {
         }
 
         if (this.isDrawingWall) {
-            this.render(); // Need to draw preview
+            this.mouseWorldPos = { x: this.snap(worldPos.x), y: this.snap(worldPos.y) };
+            this.render();
+            return;
         }
     }
 
@@ -321,10 +323,16 @@ export class CanvasEngine {
 
         // Current wall preview
         const tool = window.app.ui?.currentTool;
-        if (tool === 'wall' && this.isDrawingWall && this.wallStart) {
-            const rect = this.mainCanvas.getBoundingClientRect();
-            // Need a way to get mouse in world pos without triggering extra events
-            // For now, it's handled in onMouseMove's render call via state
+        if (tool === 'wall' && this.isDrawingWall && this.wallStart && this.mouseWorldPos) {
+            ctx.beginPath();
+            ctx.moveTo(this.wallStart.x, this.wallStart.y);
+            ctx.lineTo(this.mouseWorldPos.x, this.mouseWorldPos.y);
+            ctx.strokeStyle = 'rgba(71, 85, 105, 0.5)';
+            ctx.lineWidth = 10 / this.zoom;
+            ctx.lineCap = 'round';
+            ctx.setLineDash([5 / this.zoom, 5 / this.zoom]);
+            ctx.stroke();
+            ctx.setLineDash([]);
         }
 
         // Render Ruler
