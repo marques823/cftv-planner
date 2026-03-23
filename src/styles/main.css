@@ -202,6 +202,7 @@ button {
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .canvas-container {
@@ -231,6 +232,20 @@ canvas {
   flex-direction: column;
   gap: 24px;
   height: 100%;
+  overflow-y: auto;
+}
+
+.toolbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.toolbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+.toolbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .section-title {
