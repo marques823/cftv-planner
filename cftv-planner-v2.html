@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CFTV Planner v2 — Projeto de Câmeras</title>
+  <link rel="stylesheet" href="css/css.css">
+</head>
+
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">📡</div>
+      <div>
+        <div class="logo-text">CFTV PLANNER</div>
+        <div class="logo-sub">Projeto de Câmeras de Segurança</div>
+      </div>
+    </div>
+    <div class="header-sep"></div>
+    <div class="header-info">
+      <span>CÂMERAS: <span class="info-val" id="hdr-cams">0</span></span>
+      <span>PAREDES: <span class="info-val" id="hdr-walls">0</span></span>
+      <span>ZOOM: <span class="info-val" id="hdr-zoom">100%</span></span>
+    </div>
+    <button class="hdr-btn" onclick="saveProject()">💾 Salvar</button>
+    <label class="hdr-btn" style="cursor:pointer">📂 Abrir<input type="file" accept=".json" id="load-project"
+        onchange="loadProject(event)"></label>
+    <button class="hdr-btn primary" onclick="generateReport()">📄 Exportar PDF</button>
+  </header>
+
+  <!-- MAIN -->
+  <div class="app">
+
+    <!-- LEFT SIDEBAR -->
+    <div class="sidebar">
+
+      <div class="sec">Ferramentas</div>
+      <div class="tools">
+        <button class="tbtn active" id="tool-select" onclick="setTool('select')"><span
+            class="ic">↖</span>Selecionar</button>
+        <button class="tbtn" id="tool-wall" onclick="setTool('wall')"><span class="ic">🧱</span>Parede</button>
+        <button class="tbtn" id="tool-camera" onclick="setTool('camera')"><span class="ic">📷</span>Câmera</button>
+        <button class="tbtn" id="tool-erase" onclick="setTool('erase')"><span class="ic">🗑</span>Apagar</button>
+        <label class="tbtn tbtn-full" style="cursor:pointer"><span>📁</span>Importar Planta<input type="file"
+            accept="image/*" id="plant-upload" onchange="loadPlant(event)"></label>
+        <button class="tbtn tbtn-full" onclick="clearAll()"
+          style="color:#ff6b35;border-color:rgba(255,107,53,.4)"><span>⚠</span>Limpar Tudo</button>
+      </div>
+
+      <div class="sec">Catálogo</div>
+      <div class="brand-tabs">
+        <div class="brand-tab active" onclick="filterBrand('all',this)">Todos</div>
+        <div class="brand-tab" onclick="filterBrand('Intelbras',this)">Intelbras</div>
+        <div class="brand-tab" onclick="filterBrand('Hikvision',this)">Hikvision</div>
+        <div class="brand-tab" onclick="filterBrand('Genérico',this)">Genérico</div>
+      </div>
+      <div class="cam-list" id="cam-catalog"></div>
+
+      <div class="sec">Propriedades</div>
+      <div class="props" id="props-panel">
+        <div class="empty">Selecione uma câmera no canvas para editar.</div>
+      </div>
+
+    </div>
+
+    <!-- CANVAS -->
+    <div class="canvas-wrap" id="canvas-wrap">
+      <canvas id="bg-canvas"></canvas>
+      <canvas id="main-canvas"></canvas>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="right-panel">
+      <div class="sec">Posicionadas</div>
+      <div class="cam-placed-list" id="cam-placed-list">
+        <div class="empty">Nenhuma câmera adicionada.<br><br>Selecione um modelo e clique no canvas.</div>
+      </div>
+      <div class="sec" style="margin-top:auto">Atalhos</div>
+      <div
+        style="padding:10px 12px;font-size:10px;color:var(--text-dim);font-family:'Share Tech Mono',monospace;line-height:2">
+        S — Selecionar<br>
+        W — Parede<br>
+        C — Câmera<br>
+        E — Apagar<br>
+        ← → — Rotacionar<br>
+        Del — Excluir selecionada<br>
+        Esc — Cancelar<br>
+        Scroll — Zoom<br>
+        Btn Dir — Pan
+      </div>
+    </div>
+
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="statusbar">
+    <div style="display:flex;align-items:center;gap:6px">
+      <div class="sdot"></div> SISTEMA ATIVO
+    </div>
+    <div>MODO: <span style="color:var(--accent)" id="status-mode">SELECIONAR</span></div>
+    <div>POS: <span style="color:var(--accent)" id="status-pos">0m, 0m</span></div>
+    <div style="margin-left:auto;color:var(--text-dim)">CFTV Planner v2.0 — github.com/seu-usuario/cftv-planner</div>
+  </div>
+
+  <!-- MODAL EDIT -->
+  <div class="modal-overlay" id="modal-cam">
+    <div class="modal">
+      <div class="modal-title">✏ EDITAR CÂMERA</div>
+      <div class="modal-form">
+        <div class="prop-row">
+          <div class="prop-label">Nome / ID</div><input class="prop-input" id="edit-name"
+            placeholder="Ex: CAM-01 Entrada">
+        </div>
+        <div class="modal-row">
+          <div class="prop-row">
+            <div class="prop-label">Ângulo FOV (°)</div><input class="prop-input" id="edit-fov" type="number" min="10"
+              max="360" value="90">
+          </div>
+          <div class="prop-row">
+            <div class="prop-label">Alcance (m)</div><input class="prop-input" id="edit-range" type="number" min="1"
+              max="200" value="15">
+          </div>
+        </div>
+        <div class="prop-row">
+          <div class="prop-label">Rotação (°)</div><input class="prop-input" id="edit-rotation" type="number" min="0"
+            max="360" value="0">
+        </div>
+        <div class="prop-row">
+          <div class="prop-label">Cor do campo de visão</div>
+          <div class="color-swatches">
+            <div class="swatch active" style="background:rgba(0,229,255,.6)" data-color="0,229,255"
+              onclick="selectColor(this)"></div>
+            <div class="swatch" style="background:rgba(57,255,20,.6)" data-color="57,255,20"
+              onclick="selectColor(this)"></div>
+            <div class="swatch" style="background:rgba(255,107,53,.6)" data-color="255,107,53"
+              onclick="selectColor(this)"></div>
+            <div class="swatch" style="background:rgba(255,220,0,.6)" data-color="255,220,0"
+              onclick="selectColor(this)"></div>
+            <div class="swatch" style="background:rgba(180,100,255,.6)" data-color="180,100,255"
+              onclick="selectColor(this)"></div>
+            <div class="swatch" style="background:rgba(255,50,100,.6)" data-color="255,50,100"
+              onclick="selectColor(this)"></div>
+          </div>
+        </div>
+        <div class="prop-row">
+          <div class="prop-label">Observações</div><input class="prop-input" id="edit-notes"
+            placeholder="Ex: Cobre portão principal">
+        </div>
+      </div>
+      <div class="modal-btns">
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveEdit()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF REPORT -->
+  <div id="pdf-report">
+    <button class="rpt-close-btn" onclick="closeReport()">✕ Fechar</button>
+    <button class="rpt-print-btn" onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
+    <div id="rpt-content"></div>
+  </div>
+
+  <script src="js/planner.js"></script>
+</body>
+
+</html>

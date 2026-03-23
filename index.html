@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CFTV Planner Pro — Projetos Inteligentes</title>
+    <link rel="stylesheet" href="/src/styles/main.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+    <div id="app">
+        <!-- Dashboard Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="logo">
+                  <span class="logo-icon">📡</span>
+                  <div class="logo-text-group">
+                    <h1 class="logo-title">CFTV PLANNER <span class="badge">PRO</span></h1>
+                    <p class="logo-subtitle">Planejamento Profissional de Monitoramento</p>
+                  </div>
+                </div>
+            </div>
+
+            <div class="header-center">
+                <div class="stats-group">
+                    <div class="stat-item" title="Câmeras posicionadas">
+                        <i data-lucide="camera"></i>
+                        <span id="hdr-cams">0</span>
+                    </div>
+                    <div class="stat-item" title="Metros de parede">
+                        <i data-lucide="buffer"></i>
+                        <span id="hdr-walls">0</span>
+                    </div>
+                    <div class="stat-item" title="Nível de zoom">
+                        <i data-lucide="zoom-in"></i>
+                        <span id="hdr-zoom">100%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <button class="btn-ghost" id="btn-theme-toggle" title="Alternar tema">
+                    <i data-lucide="moon"></i>
+                </button>
+                <div class="divider"></div>
+                <div id="auth-section">
+                    <button class="btn-secondary" id="btn-login">
+                        <i data-lucide="log-in"></i> <span>Entrar</span>
+                    </button>
+                </div>
+                <div class="divider"></div>
+                <button class="btn-secondary" id="btn-save">
+                    <i data-lucide="save"></i> <span>Salvar</span>
+                </button>
+                <button class="btn-primary" id="btn-export">
+                    <i data-lucide="file-text"></i> <span>Relatório</span>
+                </button>
+            </div>
+        </header>
+
+        <main class="app-content">
+            <!-- Sidebar Toolbar -->
+            <aside class="sidebar">
+                <nav class="toolbar">
+                    <div class="tool-section">
+                        <h3 class="section-title">Ferramentas</h3>
+                        <div class="tool-grid">
+                            <button class="tool-btn active" id="tool-select" data-tool="select" title="Cursor (S)">
+                                <i data-lucide="mouse-pointer-2"></i>
+                            </button>
+                            <button class="tool-btn" id="tool-wall" data-tool="wall" title="Parede (W)">
+                                <i data-lucide="pen-tool"></i>
+                            </button>
+                            <button class="tool-btn" id="tool-camera" data-tool="camera" title="Câmera (C)">
+                                <i data-lucide="camera"></i>
+                            </button>
+                            <button class="tool-btn" id="tool-ruler" data-tool="ruler" title="Régua (R)">
+                                <i data-lucide="ruler"></i>
+                            </button>
+                            <button class="tool-btn" id="tool-erase" data-tool="erase" title="Apagar (E)">
+                                <i data-lucide="trash-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="tool-section full-width">
+                        <h3 class="section-title">Ações</h3>
+                        <button class="action-btn" id="btn-import-plant">
+                            <i data-lucide="upload"></i> <span>Planta Baixa</span>
+                            <input type="file" id="input-plant" accept="image/*" hidden>
+                        </button>
+                        <button class="action-btn danger" id="btn-clear-all">
+                            <i data-lucide="refresh-cw"></i> <span>Limpar Tudo</span>
+                        </button>
+                    </div>
+
+                    <div class="tool-section scrollable">
+                        <h3 class="section-title">Catálogo</h3>
+                        <div class="brand-tabs">
+                            <button class="tab active" data-brand="all">Todos</button>
+                            <button class="tab" data-brand="Intelbras">Intelbras</button>
+                            <button class="tab" data-brand="Hikvision">Hikvision</button>
+                        </div>
+                        <div class="catalog-list" id="cam-catalog">
+                            <!-- Injected by JS -->
+                        </div>
+                    </div>
+                </nav>
+            </aside>
+
+            <!-- Working Canvas -->
+            <section class="canvas-container" id="canvas-area">
+                <div class="canvas-wrap">
+                    <canvas id="bg-canvas"></canvas>
+                    <canvas id="main-canvas"></canvas>
+                    <div class="canvas-overlay">
+                        <div class="coord-indicator" id="status-pos">0m, 0m</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Inspector Panel -->
+            <aside class="inspector">
+                <div class="inspector-section">
+                    <h3 class="section-title">Propriedades</h3>
+                    <div id="inspector-content" class="properties-panel">
+                        <div class="empty-state">
+                            <i data-lucide="info"></i>
+                            <p>Selecione um elemento para configurar</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="inspector-section placed-cams">
+                    <h3 class="section-title">Dispositivos</h3>
+                    <div id="cam-placed-list" class="device-list">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- Status Bar -->
+        <footer class="app-status">
+            <div class="status-left">
+                <span class="pulse-indicator"></span>
+                <span id="status-text">SISTEMA ATIVO</span>
+            </div>
+            <div class="status-center">
+                PROJETO: <span class="highlight" id="project-name">Sem título</span>
+            </div>
+            <div class="status-right">
+                v3.0.0-beta
+            </div>
+        </footer>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-container" class="modal-overlay hidden">
+        <!-- Content injected by JS -->
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+      lucide.createIcons();
+    </script>
+</body>
+</html>

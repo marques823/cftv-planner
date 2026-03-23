@@ -1,0 +1,21 @@
+{
+  "name": "cftv-planner",
+  "version": "1.0.0",
+  "description": "Sistema open-source para planejamento de projetos de CFTV diretamente no navegador.\r Desenvolvido em HTML, CSS e JavaScript puro — sem dependências, sem build, totalmente offline-friendly.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "vite": "^8.0.2"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.0",
+    "lucide-static": "^1.0.1"
+  }
+}
