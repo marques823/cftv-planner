@@ -1,5 +1,6 @@
 export default {
     server: {
-        allowedHosts: ['cftv.solidsites.dev']
+        host: true,
+        allowedHosts: true
     }
 }
