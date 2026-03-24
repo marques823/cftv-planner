@@ -475,6 +475,8 @@ export class UIManager {
         const walls = this.projects.walls;
         const cameras = this.projects.cameras;
         const labels = this.projects.labels;
+        const obstacles = this.projects.obstacles || [];
+        const drawings = this.projects.drawings || [];
 
         // 1. Calculate Bounding Box of all elements
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -482,7 +484,7 @@ export class UIManager {
         const paddingMeters = 2;
         const SCALE_EXPORT = 40; // 40px = 1m (HD)
         
-        if (walls.length === 0 && cameras.length === 0 && labels.length === 0) {
+        if (walls.length === 0 && cameras.length === 0 && labels.length === 0 && obstacles.length === 0 && drawings.length === 0) {
             // Empty project fallback to workspace settings
             minX = 0; minY = 0;
             maxX = this.projects.settings.widthMeters * 10;
@@ -499,6 +501,17 @@ export class UIManager {
             labels.forEach(l => {
                 minX = Math.min(minX, l.x); minY = Math.min(minY, l.y);
                 maxX = Math.max(maxX, l.x); maxY = Math.max(maxY, l.y);
+            });
+            obstacles.forEach(o => {
+                const r = (o.radius || 0.5) * 10;
+                minX = Math.min(minX, o.x - r); minY = Math.min(minY, o.y - r);
+                maxX = Math.max(maxX, o.x + r); maxY = Math.max(maxY, o.y + r);
+            });
+            drawings.forEach(d => {
+                d.points.forEach(p => {
+                    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+                    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+                });
             });
             
             // Add margin in world units (1 unit = 0.1m, so 2m = 20 units)
@@ -542,8 +555,14 @@ export class UIManager {
         // Draw Walls
         walls.forEach(w => w.draw(ctx, SCALE_EXPORT / 10));
         
+        // Draw Obstacles
+        obstacles.forEach(o => o.draw(ctx, SCALE_EXPORT / 10, false, false));
+        
+        // Draw Drawings
+        drawings.forEach(d => d.draw(ctx, SCALE_EXPORT / 10, false, false));
+        
         // Draw FOVs
-        cameras.forEach(c => c.drawFOV(ctx, SCALE_EXPORT / 10, false, walls));
+        cameras.forEach(c => c.drawFOV(ctx, SCALE_EXPORT / 10, false, walls, obstacles, drawings));
         
         // Draw Cameras
         cameras.forEach(c => c.draw(ctx, SCALE_EXPORT / 10, false, false));
