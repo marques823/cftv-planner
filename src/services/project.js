@@ -140,6 +140,7 @@ export class ProjectManager {
 
     toJSON() {
         return JSON.stringify({
+            id: this.id,
             ...this.metadata,
             cameras: this.cameras,
             walls: this.walls,
@@ -154,14 +155,15 @@ export class ProjectManager {
             try {
                 const { saveProjectToCloud } = await import('./supabase.js');
                 const res = await saveProjectToCloud(data, userId, this.id);
-                if (res.data?.id) {
-                    this.id = res.data.id;
+                // Supabase .select() returns an array
+                if (res.data?.[0]?.id) {
+                    this.id = res.data[0].id;
                 }
             } catch (err) {
                 console.error('Erro ao salvar na nuvem:', err);
             }
         }
-        localStorage.setItem('cftv_project_latest', JSON.stringify(data));
+        localStorage.setItem('cftv_project_latest', this.toJSON());
         this.notifyChange();
     }
 

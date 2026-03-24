@@ -526,13 +526,17 @@ export class UIManager {
             const name = user.user_metadata?.full_name || user.email;
             section.innerHTML = `
                 <div class="user-profile">
-                    <span class="user-name">${name}</span>
+                    <button class="btn-ghost" id="btn-gallery" title="Meus Projetos">
+                        <i data-lucide="folder-open"></i> <span class="hide-mobile">Meus Projetos</span>
+                    </button>
+                    <span class="user-name hide-mobile">${name}</span>
                     <button class="btn-ghost" id="btn-logout" title="Sair">
                         <i data-lucide="log-out"></i>
                     </button>
                 </div>
             `;
             document.getElementById('btn-logout').onclick = () => this.auth.signOut();
+            document.getElementById('btn-gallery').onclick = () => this.showProjectGallery();
         } else {
             section.innerHTML = `
                 <button class="btn-secondary" id="btn-login">
@@ -585,6 +589,75 @@ export class UIManager {
         };
         container.querySelector('#close-modal').onclick = () => container.classList.add('hidden');
         lucide.createIcons();
+    }
+
+    async showProjectGallery() {
+        const user = this.auth.getCurrentUser();
+        if (!user) return;
+
+        const container = document.getElementById('modal-container');
+        container.classList.remove('hidden');
+        container.innerHTML = `
+            <div class="modal project-gallery-modal">
+                <h3 class="modal-title">Meus Projetos Salvos</h3>
+                <div class="modal-body">
+                    <div id="gallery-list" class="gallery-list">
+                        <div class="loading-state">Carregando seus projetos...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-ghost" id="close-modal">Fechar</button>
+                </div>
+            </div>
+        `;
+
+        container.querySelector('#close-modal').onclick = () => container.classList.add('hidden');
+        lucide.createIcons();
+
+        try {
+            const { loadUserProjects } = await import('../services/supabase.js');
+            const projects = await loadUserProjects(user.id);
+            const list = container.querySelector('#gallery-list');
+            
+            if (projects.length === 0) {
+                list.innerHTML = '<p class="empty-state">Nenhum projeto encontrado na nuvem.</p>';
+                return;
+            }
+
+            list.innerHTML = '';
+            projects.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'gallery-item';
+                const date = new Date(p.updated_at).toLocaleDateString('pt-BR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+                
+                item.innerHTML = `
+                    <div class="gallery-info">
+                        <div class="gallery-name">${p.name || 'Sem título'}</div>
+                        <div class="gallery-date">${date}</div>
+                    </div>
+                    <button class="btn-secondary btn-sm btn-open-project" data-id="${p.id}">
+                        <i data-lucide="external-link"></i> Abrir
+                    </button>
+                `;
+                
+                item.querySelector('.btn-open-project').onclick = () => {
+                    // Combine project ID with the data blob
+                    const projectData = { ...p.data, id: p.id };
+                    this.projects.loadFromJSON(JSON.stringify(projectData));
+                    this.engine.drawGrid();
+                    this.engine.render();
+                    container.classList.add('hidden');
+                };
+                
+                list.appendChild(item);
+            });
+            lucide.createIcons();
+        } catch (err) {
+            console.error(err);
+            container.querySelector('#gallery-list').innerHTML = `<p class="error-state">Erro ao carregar projetos: ${err.message}</p>`;
+        }
     }
 
     updateEntity(prop, val) {
