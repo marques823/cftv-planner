@@ -14,18 +14,28 @@ export async function saveProjectToCloud(projectData, userId, projectId = null) 
         return { success: true, local: true };
     }
 
+    console.log('Serviço Supabase: Upserting', { projectId, userId });
+
+    const payload = { 
+        name: projectData.name || 'Projeto sem título',
+        data: projectData,
+        user_id: userId,
+        updated_at: new Date()
+    };
+
+    if (projectId) payload.id = projectId;
+
     const { data, error } = await supabase
         .from('projects')
-        .upsert({ 
-            id: projectId || undefined,
-            name: projectData.name,
-            data: projectData,
-            user_id: userId,
-            updated_at: new Date()
-        })
+        .upsert(payload, { onConflict: 'id' })
         .select();
 
-    if (error) throw error;
+    if (error) {
+        console.error('Erro no Supabase Upsert:', error);
+        throw error;
+    }
+    
+    console.log('Sucesso no Upsert. Dados retornados:', data);
     return { success: true, data };
 }
 
