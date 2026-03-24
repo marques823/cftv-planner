@@ -23,6 +23,9 @@ export class CanvasEngine {
         this.selectionStart = null;
         this.selectionEnd = null;
         
+        this.isDrawingFreehand = false;
+        this.currentDrawing = null;
+        
         this.lastMouseX = 0;
         this.lastMouseY = 0;
         this.dragOffset = { x: 0, y: 0 };
@@ -177,6 +180,21 @@ export class CanvasEngine {
             if (dist < Math.max(radius, 15 / this.zoom)) return { type: 'obstacle', index: i, entity: o };
         }
 
+        // Check drawings (rough bounding box hit test)
+        for (let i = this.project.drawings.length - 1; i >= 0; i--) {
+            const d = this.project.drawings[i];
+            if (d.points.length === 0) continue;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            d.points.forEach(p => {
+                minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+                maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+            });
+            const pad = 10 / this.zoom;
+            if (wx >= minX - pad && wx <= maxX + pad && wy >= minY - pad && wy <= maxY + pad) {
+                return { type: 'drawing', index: i, entity: d };
+            }
+        }
+
         return null;
     }
 
@@ -321,6 +339,15 @@ export class CanvasEngine {
                 this.isRotatingNewCamera = true;
                 this.rotatingCamera = newCam;
             }
+        } else if (tool === 'draw') {
+            this.isDrawingFreehand = true;
+            this.currentDrawing = new FreeDraw({
+                points: [{ x: worldPos.x, y: worldPos.y }],
+                color: '255,255,255',
+                lineWidth: 3
+            });
+            this.render();
+            return;
         } else if (tool === 'wall') {
             this.isPanning = false; // never pan while placing wall points
             const sx = this.snap(worldPos.x);
@@ -434,6 +461,7 @@ export class CanvasEngine {
                 else if (hit.type === 'wall') this.project.removeWall(hit.index);
                 else if (hit.type === 'label') this.project.removeLabel(hit.index);
                 else if (hit.type === 'obstacle') this.project.removeObstacle(hit.index);
+                else if (hit.type === 'drawing') this.project.removeDrawing(hit.index);
                 this.selectedEntities = [];
                 window.app.ui.onEntitySelected(null);
             }
@@ -568,6 +596,16 @@ export class CanvasEngine {
         if (this.isSelectionBox) {
             this.selectionEnd = worldPos;
             this.render();
+            return;
+        }
+
+        if (this.isDrawingFreehand && this.currentDrawing) {
+            const lastPoint = this.currentDrawing.points[this.currentDrawing.points.length - 1];
+            const dist = Math.sqrt((worldPos.x - lastPoint.x) ** 2 + (worldPos.y - lastPoint.y) ** 2);
+            if (dist > 2 / this.zoom) {
+                this.currentDrawing.points.push({ x: worldPos.x, y: worldPos.y });
+                this.render();
+            }
             return;
         }
 
@@ -729,6 +767,20 @@ export class CanvasEngine {
     }
 
     onPointerUp(e) {
+        if (this.isSnapshotMode) return;
+
+        if (this.isDrawingFreehand && this.currentDrawing) {
+            if (this.currentDrawing.points.length > 1) {
+                this.project.addDrawing(this.currentDrawing);
+                this.selectedEntities = [{ type: 'drawing', index: this.project.drawings.length - 1, entity: this.currentDrawing }];
+                window.app.ui.onEntitySelected(this.selectedEntities[0]);
+            }
+            this.isDrawingFreehand = false;
+            this.currentDrawing = null;
+            this.render();
+            return;
+        }
+
         if (this.isSelectionBox && this.selectionStart && this.selectionEnd) {
             const x1 = Math.min(this.selectionStart.x, this.selectionEnd.x);
             const y1 = Math.min(this.selectionStart.y, this.selectionEnd.y);
@@ -979,6 +1031,16 @@ export class CanvasEngine {
             const isHovered = this.hoveredEntity?.entity === l;
             l.draw(ctx, this.zoom, isSelected, isHovered);
         });
+
+        this.project.drawings.forEach(d => {
+            const isSelected = this.selectedEntities.some(s => s.entity === d);
+            const isHovered = this.hoveredEntity?.entity === d;
+            d.draw(ctx, this.zoom, isSelected, isHovered);
+        });
+
+        if (this.currentDrawing) {
+            this.currentDrawing.draw(ctx, this.zoom, false, false);
+        }
 
         // 4. Render selection box (Marquee)
         if (this.isSelectionBox && this.selectionStart && this.selectionEnd) {

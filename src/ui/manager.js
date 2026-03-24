@@ -154,6 +154,7 @@ export class UIManager {
                         else if (s.type === 'wall') window.app.project.walls = window.app.project.walls.filter(w => w !== s.entity);
                         else if (s.type === 'label') window.app.project.labels = window.app.project.labels.filter(l => l !== s.entity);
                         else if (s.type === 'obstacle') window.app.project.obstacles = window.app.project.obstacles.filter(o => o !== s.entity);
+                        else if (s.type === 'drawing') window.app.project.drawings = window.app.project.drawings.filter(d => d !== s.entity);
                     });
                     engine.selectedEntities = [];
                     window.app.project.notifyChange();
@@ -278,47 +279,61 @@ export class UIManager {
                     <i data-lucide="trash-2"></i> Excluir Texto
                 </button>
             `;
-        } else if (hit.type === 'obstacle') {
-            const types = [
-                { id: 'tree', name: 'Árvore', icon: 'tree-pine' },
-                { id: 'bush', name: 'Arbusto', icon: 'leaf' },
-                { id: 'post', name: 'Poste', icon: 'map-pin' },
-                { id: 'box', name: 'Caixa/Obstáculo', icon: 'box' },
-            ];
+        } else if (hit.type === 'obstacle' || hit.type === 'drawing') {
+            const isDrawing = hit.type === 'drawing';
+            const isObstacle = hit.type === 'obstacle';
+            const title = isDrawing ? 'Editar Desenho' : (isObstacle ? 'Editar Objeto Livre' : 'Editar Texto');
             
             pnl.innerHTML = `
-                <h3 class="panel-title">Editar Objeto Livre</h3>
+                <h3 class="panel-title">${title}</h3>
+                ${isObstacle ? `
                 <div class="prop-group">
                     <label>Tipo de Objeto</label>
                     <select data-prop="type" class="form-select">
-                        ${types.map(t => `<option value="${t.id}" ${entity.type === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}
+                        <option value="tree" ${entity.type === 'tree' ? 'selected' : ''}>Árvore</option>
+                        <option value="bush" ${entity.type === 'bush' ? 'selected' : ''}>Arbusto</option>
+                        <option value="post" ${entity.type === 'post' ? 'selected' : ''}>Poste</option>
+                        <option value="box" ${entity.type === 'box' ? 'selected' : ''}>Caixa/Obstáculo</option>
                     </select>
                 </div>
                 <div class="prop-group">
                     <label>Tamanho / Raio: <span class="val">${entity.radius}m</span></label>
                     <input type="range" min="0.1" max="10" step="0.1" value="${entity.radius}" data-prop="radius">
                 </div>
+                ` : ''}
+                
+                ${isDrawing ? `
                 <div class="prop-group">
-                    <label>Texto Opcional</label>
-                    <input type="text" value="${entity.text}" data-prop="text" placeholder="Ex: Poste 01">
+                    <label>Espessura do Traço: <span class="val">${entity.lineWidth}px</span></label>
+                    <input type="range" min="1" max="20" step="1" value="${entity.lineWidth}" data-prop="lineWidth">
                 </div>
+                ` : `
+                <div class="prop-group">
+                    <label>${isObstacle ? 'Texto Opcional' : 'Conteúdo do Texto'}</label>
+                    <input type="text" value="${entity.text}" data-prop="text" placeholder="${isObstacle ? 'Ex: Poste 01' : 'Digite aqui...'}">
+                </div>
+                `}
+
+                ${isObstacle ? `
                 <div class="prop-group" style="flex-direction: row; justify-content: space-between; align-items: center">
                     <label style="margin:0">Bloquear Visão (Obstáculo)</label>
                     <input type="checkbox" ${entity.isObstacle ? 'checked' : ''} data-prop="isObstacle" data-type="bool">
                 </div>
+                ` : ''}
+
                 <div class="property-group">
                     <label>Cor do Elemento</label>
                     <div class="color-presets">
+                        <div class="color-opt" style="background:#ffffff" onclick="window.app.ui.updateEntity('color', '255,255,255')"></div>
                         <div class="color-opt" style="background:#22c55e" onclick="window.app.ui.updateEntity('color', '34,197,94')"></div>
-                        <div class="color-opt" style="background:#16a34a" onclick="window.app.ui.updateEntity('color', '22,163,74')"></div>
-                        <div class="color-opt" style="background:#94a3b8" onclick="window.app.ui.updateEntity('color', '148,163,184')"></div>
-                        <div class="color-opt" style="background:#475569" onclick="window.app.ui.updateEntity('color', '71,85,105')"></div>
+                        <div class="color-opt" style="background:#3b82f6" onclick="window.app.ui.updateEntity('color', '59,130,246')"></div>
                         <div class="color-opt" style="background:#f59e0b" onclick="window.app.ui.updateEntity('color', '245,158,11')"></div>
                         <div class="color-opt" style="background:#ef4444" onclick="window.app.ui.updateEntity('color', '239,68,68')"></div>
+                        <div class="color-opt" style="background:#000000" onclick="window.app.ui.updateEntity('color', '0,0,0')"></div>
                     </div>
                 </div>
                 <button class="btn-danger-outline" id="btn-delete-entity">
-                    <i data-lucide="trash-2"></i> Excluir Objeto
+                    <i data-lucide="trash-2"></i> Excluir ${isDrawing ? 'Desenho' : (isObstacle ? 'Objeto' : 'Texto')}
                 </button>
             `;
         }
@@ -344,9 +359,9 @@ export class UIManager {
                 } else if (isBool) {
                     entity[prop] = val;
                 } else {
-                    entity[prop] = (prop === 'name' || prop === 'text' || prop === 'type') ? val : (prop.includes('rotation') || prop.includes('fov') || prop.includes('range') || prop.includes('fontSize') ? parseInt(val) : (prop === 'radius' ? parseFloat(val) : val));
+                    entity[prop] = (prop === 'name' || prop === 'text' || prop === 'type') ? val : (prop.includes('rotation') || prop.includes('fov') || prop.includes('range') || prop.includes('fontSize') || prop.includes('lineWidth') ? parseInt(val) : (prop === 'radius' ? parseFloat(val) : val));
                     if (e.target.previousElementSibling?.querySelector('.val')) {
-                        e.target.previousElementSibling.querySelector('.val').textContent = `${val}${prop === 'fontSize' ? 'px' : (prop === 'range' || prop === 'radius' ? 'm' : (prop === 'rotation' || prop === 'fov' ? '°' : ''))}`;
+                        e.target.previousElementSibling.querySelector('.val').textContent = `${val}${prop === 'fontSize' || prop === 'lineWidth' ? 'px' : (prop === 'range' || prop === 'radius' ? 'm' : (prop === 'rotation' || prop === 'fov' ? '°' : ''))}`;
                     }
                 }
                 this.engine.render();
@@ -367,6 +382,7 @@ export class UIManager {
                 }
                 else if (hit.type === 'label') this.projects.removeLabel(hit.index);
                 else if (hit.type === 'obstacle') this.projects.removeObstacle(hit.index);
+                else if (hit.type === 'drawing') this.projects.removeDrawing(hit.index);
                 this.onEntitySelected(null);
                 this.engine.render();
                 this.renderPlacedList();
@@ -972,12 +988,13 @@ export class UIManager {
         switch(e.key.toLowerCase()) {
             case 's': this.setTool('select'); break;
             case 'w': this.setTool('wall'); break;
-            case 'd': this.setTool('door'); break;
+            case 'p': this.setTool('door'); break;
             case 'j': this.setTool('window'); break;
             case 'c': this.setTool('camera'); break;
             case 'r': this.setTool('ruler'); break;
             case 't': this.setTool('text'); break;
             case 'o': this.setTool('obstacle'); break;
+            case 'd': this.setTool('draw'); break;
             case 'e': this.setTool('erase'); break;
             case 'm': this.setTool('move'); break;
             case 'escape': 

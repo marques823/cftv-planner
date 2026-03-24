@@ -531,3 +531,39 @@ export class Obstacle {
         ctx.restore();
     }
 }
+
+export class FreeDraw {
+    constructor(config) {
+        this.id = config.id || Math.random().toString(36).substr(2, 9);
+        this.points = config.points || []; // Array of {x, y}
+        this.color = config.color || '255,255,255';
+        this.lineWidth = config.lineWidth || 2;
+    }
+
+    draw(ctx, zoom, isSelected, isHovered) {
+        if (this.points.length < 2) return;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].x, this.points[0].y);
+        for (let i = 1; i < this.points.length; i++) {
+            ctx.lineTo(this.points[i].x, this.points[i].y);
+        }
+
+        ctx.strokeStyle = `rgb(${this.color})`;
+        ctx.lineWidth = this.lineWidth / zoom;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        if (isSelected || isHovered) {
+            ctx.strokeStyle = isSelected ? '#3b82f6' : '#60a5fa';
+            ctx.lineWidth = (this.lineWidth + 4) / zoom;
+            ctx.globalAlpha = 0.3;
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+        }
+
+        ctx.restore();
+    }
+}
