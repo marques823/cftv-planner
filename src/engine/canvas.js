@@ -1,4 +1,4 @@
-import { Camera, Wall, TextLabel } from './entities.js';
+import { Camera, Wall, TextLabel, Obstacle } from './entities.js';
 
 const SCALE = 10; // 10px = 1m
 
