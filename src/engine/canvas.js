@@ -13,24 +13,28 @@ export class CanvasEngine {
         this.offsetX = 50;
         this.offsetY = 50;
         
+        this.selectedEntities = []; // Array of { type, index, entity }
+        this.hoveredEntity = null;
+        
         this.isPanning = false;
         this.isDragging = false;
         this.isDrawingWall = false;
+        this.isSelectionBox = false;
+        this.selectionStart = null;
+        this.selectionEnd = null;
         
         this.lastMouseX = 0;
         this.lastMouseY = 0;
         this.dragOffset = { x: 0, y: 0 };
+        this.dragOffsets = []; // Store offsets for all selected items
         
         this.project = null; // Set via setter
-        this.selectedEntity = null;
-        this.hoveredEntity = null;
-        
         this.wallStart = null;
         this.pointers = new Map();
         this.pinchDist = 0;
-        this.pinchBaseZoom = 1; // zoom at start of pinch gesture
+        this.pinchBaseZoom = 1;
 
-        // Double-tap detection (to finalize wall on mobile/stylus)
+        // Double-tap detection
         this._lastTapTime = 0;
         this._lastTapX = 0;
         this._lastTapY = 0;
@@ -216,7 +220,7 @@ export class CanvasEngine {
             this._lastTapY = tapY;
         }
 
-        if (e.button === 2) { // Right click
+        if (e.button === 2 || e.button === 1) { // Right or Middle click
             if (this.isDrawingWall) {
                 this.isDrawingWall = false;
                 this.wallStart = null;
@@ -230,44 +234,12 @@ export class CanvasEngine {
             return;
         }
 
+        // Only allow tool interactions with primary button (left click / touch / s-pen tip)
+        if (e.button !== 0) return;
+
         const tool = window.app.ui.currentTool;
 
-        if (tool === 'select' || tool === 'move') {
-            const hit = this.getEntityAt(worldPos.x, worldPos.y);
-            this.selectedEntity = hit;
-            window.app.ui.onEntitySelected(hit);
 
-            if (hit) {
-                if (tool === 'move') {
-                    this.project.saveState();
-                    this.isDragging = true;
-                    if (hit.type === 'camera') {
-                        this.dragOffset = {
-                            x: worldPos.x - hit.entity.x,
-                            y: worldPos.y - hit.entity.y
-                        };
-                    } else if (hit.type === 'wall-endpoint') {
-                        // drag only the endpoint that was clicked
-                        this.dragOffset = { which: hit.which };
-                    } else if (hit.type === 'wall') {
-                        // drag whole wall body
-                        this.dragOffset = {
-                            x1: worldPos.x - hit.entity.x1,
-                            y1: worldPos.y - hit.entity.y1,
-                            x2: worldPos.x - hit.entity.x2,
-                            y2: worldPos.y - hit.entity.y2
-                        };
-                    } else if (hit.type === 'label') {
-                        this.dragOffset = {
-                            x: worldPos.x - hit.entity.x,
-                            y: worldPos.y - hit.entity.y
-                        };
-                    }
-                }
-                this.render();
-                return;
-            }
-        }
 
         if (tool === 'ruler') {
             const sx = worldPos.x;
@@ -293,10 +265,10 @@ export class CanvasEngine {
                     displayName: `CAM-${String(this.project.cameras.length + 1).padStart(2, '0')}`
                 });
                 this.project.addCamera(newCam);
-                this.selectedEntity = { type: 'camera', index: this.project.cameras.length - 1, entity: newCam };
+                this.selectedEntities = [{ type: 'camera', index: this.project.cameras.length - 1, entity: newCam }];
                 this.isRotatingNewCamera = true;
                 this.rotatingCamera = newCam;
-                window.app.ui.onEntitySelected(this.selectedEntity);
+                window.app.ui.onEntitySelected(this.selectedEntities[0]);
             }
         } else if (tool === 'wall') {
             this.isPanning = false; // never pan while placing wall points
@@ -368,8 +340,8 @@ export class CanvasEngine {
                 text: 'Nova Anotação'
             });
             this.project.addLabel(newLabel);
-            this.selectedEntity = { type: 'label', index: this.project.labels.length - 1, entity: newLabel };
-            window.app.ui.onEntitySelected(this.selectedEntity);
+            this.selectedEntities = [{ type: 'label', index: this.project.labels.length - 1, entity: newLabel }];
+            window.app.ui.onEntitySelected(this.selectedEntities[0]);
         } else if (tool === 'door' || tool === 'window') {
             if (this.previewElement) {
                 this.project.saveState();
@@ -382,13 +354,13 @@ export class CanvasEngine {
                 
                 // Select the newly added element
                 const newIdx = this.previewElement.wall.elements.length - 1;
-                this.selectedEntity = {
+                this.selectedEntities = [{
                     type: 'wall-element',
                     wall: this.previewElement.wall,
                     elementIndex: newIdx,
                     entity: this.previewElement.wall.elements[newIdx]
-                };
-                window.app.ui.onEntitySelected(this.selectedEntity);
+                }];
+                window.app.ui.onEntitySelected(this.selectedEntities[0]);
                 
                 // Reset tool back to select
                 window.app.ui.setTool('select');
@@ -400,14 +372,62 @@ export class CanvasEngine {
                 if (hit.type === 'camera') this.project.removeCamera(hit.index);
                 else if (hit.type === 'wall') this.project.removeWall(hit.index);
                 else if (hit.type === 'label') this.project.removeLabel(hit.index);
-                this.selectedEntity = null;
+                this.selectedEntities = [];
                 window.app.ui.onEntitySelected(null);
             }
         } else {
-            // Default action: Pan
-            this.isPanning = true;
-            this.lastMouseX = e.clientX;
-            this.lastMouseY = e.clientY;
+            // "Select" tool or Default: Handle hit testing and marquee
+            const hit = this.getEntityAt(worldPos.x, worldPos.y);
+            const isShift = e.shiftKey;
+
+            if (hit) {
+                this.isPanning = false;
+                const alreadySelectedIdx = this.selectedEntities.findIndex(s => s.entity === hit.entity);
+
+                if (isShift) {
+                    if (alreadySelectedIdx >= 0) {
+                        this.selectedEntities.splice(alreadySelectedIdx, 1);
+                    } else {
+                        this.selectedEntities.push(hit);
+                    }
+                } else {
+                    if (alreadySelectedIdx < 0) {
+                        this.selectedEntities = [hit];
+                    }
+                }
+
+                this.isDragging = true;
+                // Store initial offsets for all selected entities
+                this.dragOffsets = this.selectedEntities.map(s => {
+                    const off = {};
+                    if (s.type === 'camera' || s.type === 'label') {
+                        off.x = worldPos.x - s.entity.x;
+                        off.y = worldPos.y - s.entity.y;
+                    } else if (s.type === 'wall' || s.type === 'wall-endpoint') {
+                        off.x1 = worldPos.x - (s.entity.x1 || 0);
+                        off.y1 = worldPos.y - (s.entity.y1 || 0);
+                        off.x2 = worldPos.x - (s.entity.x2 || 0);
+                        off.y2 = worldPos.y - (s.entity.y2 || 0);
+                        if (s.type === 'wall-endpoint') off.which = s.which;
+                    }
+                    return off;
+                });
+
+                window.app.ui.onEntitySelected(this.selectedEntities.length === 1 ? this.selectedEntities[0] : (this.selectedEntities.length > 1 ? { type: 'multiple', count: this.selectedEntities.length } : null));
+            } else {
+                if (!isShift) this.selectedEntities = [];
+                
+                if (this.pointers.size === 1) {
+                    this.isSelectionBox = true;
+                    this.selectionStart = worldPos;
+                    this.selectionEnd = worldPos;
+                } else {
+                    this.isPanning = true;
+                    this.lastMouseX = e.clientX;
+                    this.lastMouseY = e.clientY;
+                }
+                window.app.ui.onEntitySelected(null);
+            }
         }
 
         this.render();
@@ -476,32 +496,36 @@ export class CanvasEngine {
             return;
         }
 
-        if (this.isDragging && this.selectedEntity) {
-            if (this.selectedEntity.type === 'camera') {
-                const targetX = worldPos.x - this.dragOffset.x;
-                const targetY = worldPos.y - this.dragOffset.y;
-                this.selectedEntity.entity.x = this.snap(targetX);
-                this.selectedEntity.entity.y = this.snap(targetY);
-            } else if (this.selectedEntity.type === 'wall-endpoint') {
-                // Move only the clicked endpoint (p1 or p2)
-                const w = this.selectedEntity.entity;
-                if (this.dragOffset.which === 'p1') {
-                    w.x1 = this.snap(worldPos.x);
-                    w.y1 = this.snap(worldPos.y);
-                } else {
-                    w.x2 = this.snap(worldPos.x);
-                    w.y2 = this.snap(worldPos.y);
+        if (this.isSelectionBox) {
+            this.selectionEnd = worldPos;
+            this.render();
+            return;
+        }
+
+        if (this.isDragging && this.selectedEntities.length > 0) {
+            this.selectedEntities.forEach((s, idx) => {
+                const off = this.dragOffsets[idx];
+                if (s.type === 'camera') {
+                    s.entity.x = this.snap(worldPos.x - off.x);
+                    s.entity.y = this.snap(worldPos.y - off.y);
+                } else if (s.type === 'label') {
+                    s.entity.x = worldPos.x - off.x;
+                    s.entity.y = worldPos.y - off.y;
+                } else if (s.type === 'wall') {
+                    s.entity.x1 = this.snap(worldPos.x - off.x1);
+                    s.entity.y1 = this.snap(worldPos.y - off.y1);
+                    s.entity.x2 = this.snap(worldPos.x - off.x2);
+                    s.entity.y2 = this.snap(worldPos.y - off.y2);
+                } else if (s.type === 'wall-endpoint') {
+                    if (off.which === 'p1') {
+                        s.entity.x1 = this.snap(worldPos.x);
+                        s.entity.y1 = this.snap(worldPos.y);
+                    } else {
+                        s.entity.x2 = this.snap(worldPos.x);
+                        s.entity.y2 = this.snap(worldPos.y);
+                    }
                 }
-            } else if (this.selectedEntity.type === 'wall') {
-                const w = this.selectedEntity.entity;
-                w.x1 = this.snap(worldPos.x - this.dragOffset.x1);
-                w.y1 = this.snap(worldPos.y - this.dragOffset.y1);
-                w.x2 = this.snap(worldPos.x - this.dragOffset.x2);
-                w.y2 = this.snap(worldPos.y - this.dragOffset.y2);
-            } else if (this.selectedEntity.type === 'label') {
-                this.selectedEntity.entity.x = worldPos.x - this.dragOffset.x;
-                this.selectedEntity.entity.y = worldPos.y - this.dragOffset.y;
-            }
+            });
             this.render();
             return;
         }
@@ -559,7 +583,7 @@ export class CanvasEngine {
             this.render();
             
             // Update inspector if open without full re-render
-            if (this.selectedEntity?.entity === this.rotatingCamera) {
+            if (this.selectedEntities[0]?.entity === this.rotatingCamera) {
                 const rotInput = document.querySelector('input[data-prop="rotation"]');
                 if (rotInput) {
                     rotInput.value = this.rotatingCamera.rotation;
@@ -605,23 +629,52 @@ export class CanvasEngine {
     }
 
     onPointerUp(e) {
+        if (this.isSelectionBox && this.selectionStart && this.selectionEnd) {
+            const x1 = Math.min(this.selectionStart.x, this.selectionEnd.x);
+            const y1 = Math.min(this.selectionStart.y, this.selectionEnd.y);
+            const x2 = Math.max(this.selectionStart.x, this.selectionEnd.x);
+            const y2 = Math.max(this.selectionStart.y, this.selectionEnd.y);
+
+            // Find entities within box
+            const found = [];
+            this.project.cameras.forEach((c, i) => {
+                if (c.x >= x1 && c.x <= x2 && c.y >= y1 && c.y <= y2) found.push({ type: 'camera', index: i, entity: c });
+            });
+            this.project.walls.forEach((w, i) => {
+                if ((w.x1 >= x1 && w.x1 <= x2 && w.y1 >= y1 && w.y1 <= y2) || (w.x2 >= x1 && w.x2 <= x2 && w.y2 >= y1 && w.y2 <= y2)) {
+                    found.push({ type: 'wall', index: i, entity: w });
+                }
+            });
+            this.project.labels.forEach((l, i) => {
+                if (l.x >= x1 && l.x <= x2 && l.y >= y1 && l.y <= y2) found.push({ type: 'label', index: i, entity: l });
+            });
+
+            if (e.shiftKey) {
+                found.forEach(f => {
+                    if (!this.selectedEntities.find(s => s.entity === f.entity)) this.selectedEntities.push(f);
+                });
+            } else {
+                this.selectedEntities = found;
+            }
+
+            window.app.ui.onEntitySelected(this.selectedEntities.length === 1 ? this.selectedEntities[0] : (this.selectedEntities.length > 1 ? { type: 'multiple', count: this.selectedEntities.length } : null));
+        }
+
         this.pointers.delete(e.pointerId);
         if (this.pointers.size < 2) {
             this.lastMidX = null;
             this.lastMidY = null;
         }
-        if (this.pointers.size === 1) {
-            // Update the last mouse coordinates for the remaining pointer to prevent panning jumps
-            const remaining = Array.from(this.pointers.values())[0];
-            this.lastMouseX = remaining.x;
-            this.lastMouseY = remaining.y;
-        }
-        if (this.pointers.size === 0) {
-            this.isPanning = false;
-            this.isDragging = false;
-            this.isRotatingNewCamera = false;
-            this.rotatingCamera = null;
-        }
+        
+        this.isPanning = false;
+        this.isDragging = false;
+        this.isSelectionBox = false;
+        this.selectionStart = null;
+        this.selectionEnd = null;
+        this.isMeasuring = false;
+        this.isDrawingWall = false;
+        this.isRotatingNewCamera = false;
+        this.rotatingCamera = null;
         this.render();
     }
 
@@ -747,10 +800,7 @@ export class CanvasEngine {
         
         // Render walls
         this.project.walls.forEach((w, i) => {
-            const isSelected = (
-                (this.selectedEntity?.type === 'wall' && this.selectedEntity.index === i) ||
-                (this.selectedEntity?.type === 'wall-endpoint' && this.selectedEntity.index === i)
-            );
+            const isSelected = this.selectedEntities.some(s => s.entity === w);
             
             if (this.previewElement && this.previewElement.wall === w) {
                 w.elements.push(this.previewElement);
@@ -814,25 +864,41 @@ export class CanvasEngine {
             ctx.fillText(`${distMeters}m`, midX, midY - 10 / this.zoom);
         }
 
-        // Render FOVs (underneath cameras)
-        this.project.cameras.forEach((cam, i) => {
-            const isSelected = this.selectedEntity?.type === 'camera' && this.selectedEntity.index === i;
-            cam.drawFOV(ctx, this.zoom, isSelected, this.project.walls);
+        // Render Cameras & Labels
+        this.project.cameras.forEach(c => {
+            const isSelected = this.selectedEntities.some(s => s.entity === c);
+            const isHovered = this.hoveredEntity?.entity === c;
+            c.drawFOV(ctx, this.zoom, isSelected, this.project.walls);
+            c.draw(ctx, this.zoom, isSelected, isHovered);
         });
 
-        // Render cameras
-        this.project.cameras.forEach((cam, i) => {
-            const isSelected = this.selectedEntity?.type === 'camera' && this.selectedEntity.index === i;
-            const isHovered = this.hoveredEntity?.type === 'camera' && this.hoveredEntity.index === i;
-            cam.draw(ctx, this.zoom, isSelected, isHovered);
-        });
-
-        // Render labels
-        this.project.labels.forEach((l, i) => {
-            const isSelected = this.selectedEntity?.type === 'label' && this.selectedEntity.index === i;
-            const isHovered = this.hoveredEntity?.type === 'label' && this.hoveredEntity.index === i;
+        this.project.labels.forEach(l => {
+            const isSelected = this.selectedEntities.some(s => s.entity === l);
+            const isHovered = this.hoveredEntity?.entity === l;
             l.draw(ctx, this.zoom, isSelected, isHovered);
         });
+
+        // 4. Render selection box (Marquee)
+        if (this.isSelectionBox && this.selectionStart && this.selectionEnd) {
+            ctx.restore(); // Exit world transform for drawing screen-space (or kept in world if preferred)
+            ctx.save();
+            ctx.translate(this.offsetX, this.offsetY);
+            ctx.scale(this.zoom, this.zoom);
+
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+            ctx.lineWidth = 1 / this.zoom;
+            
+            const x = Math.min(this.selectionStart.x, this.selectionEnd.x);
+            const y = Math.min(this.selectionStart.y, this.selectionEnd.y);
+            const w = Math.abs(this.selectionStart.x - this.selectionEnd.x);
+            const h = Math.abs(this.selectionStart.y - this.selectionEnd.y);
+            
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x, y, w, h);
+            ctx.restore();
+            ctx.save(); // restore the context for the final line match
+        }
         
         ctx.restore();
     }

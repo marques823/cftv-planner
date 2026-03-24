@@ -1,70 +1,57 @@
-# 🎥 CFTV Planner Pro
+# 📡 CFTV Planner Pro
 
-Sistema profissional de código aberto para planejamento de projetos de CFTV diretamente no navegador.
-Modernizado com **Vite**, **ES Modules** e suporte a **Supabase**.
+Solução profissional para planejamento e design de sistemas de segurança e monitoramento (CFTV). Crie plantas baixas, posicione câmeras com FOV (Campo de Visão) real e gere relatórios detalhados em segundos.
 
----
+![Preview](https://cftv.solidsites.dev/preview.png)
 
-## ✨ Funcionalidades Avançadas
+## 🚀 Funcionalidades Principais
 
-*   **Canvas Ultra-Fluido**: Motor de renderização otimizado para múltiplos elementos.
-*   **Persistência na Nuvem**: Salve seus projetos diretamente no **Supabase** (opcional).
-*   **Ferramenta de Medição**: Meça distâncias reais em metros no seu projeto.
-*   **Lista de Materiais (BOM)**: Geração automática de inventário de câmeras por marca e modelo.
-*   **Design System Moderno**: Temas Dark e Light com variáveis CSS.
-*   **Relatórios em PDF**: Exporte o layout e a lista técnica do projeto.
+- **Seleção Múltipla & Marquee:** Selecione e mova grupos de câmeras e paredes simultaneamente.
+- **Nuvem (Supabase):** Salve seus projetos na conta e acesse de qualquer lugar.
+- **Relatórios HD:** Exportação de PDF/Imagem em alta definição com auto-enquadramento e legenda colorida.
+- **Catálogo Inteligente:** Marcas líderes (Intelbras, Hikvision) com especificações técnicas reais.
+- **S-Pen Optimization:** Interface responsiva e otimizada para tablets e celulares premium como S24 Ultra.
+- **Medição Real:** Régua de precisão e escala automática baseada em metros.
 
----
+## 🛠️ Tecnologias
 
-## 🚀 Como Começar
+- **Frontend:** Vanilla JS, Canvas API, Lucide Icons.
+- **Backend/DB:** Supabase (Auth + PostgreSQL).
+- **Tooling:** Vite, CSS Grid/Flexbox.
 
-### Pré-requisitos
-*   [Node.js](https://nodejs.org/) instalado.
+## 💻 Como Rodar Localmente
 
-### Instalação
 1. Clone o repositório:
    ```bash
-   git clone https://github.com/tiago/cftv-planner.git
-   cd cftv-planner
+   git clone https://github.com/marques823/cftv-planner.git
    ```
 2. Instale as dependências:
    ```bash
    npm install
    ```
-3. (Opcional) Configure o **Supabase**:
-   *   Copie o arquivo `.env.example` para `.env`.
-   *   Preencha com sua URL e Chave Anon do Supabase.
-4. Inicie o servidor de desenvolvimento:
+3. Configure o `.env` com suas chaves do Supabase.
+4. Execute o servidor de desenvolvimento:
    ```bash
    npm run dev
    ```
 
----
+## 🐋 Como Manter Ativo (Servidor)
 
-## 🛠️ Tecnologias
+Para garantir que o sistema continue rodando mesmo após fechar o terminal, utilize o **PM2**:
 
-*   **HTML5 & CSS3** (Vanilla com variáveis)
-*   **JavaScript (ES6+)**
-*   **Vite** (Build tool)
-*   **Supabase** (Backend as a Service)
-*   **Lucide Icons**
-
----
-
-## 🤝 Contribuição
-
-Contribuições são fundamentais para o projeto! 
-Sinta-se à vontade para abrir Issues ou enviar Pull Requests.
-
----
-
-## 📄 Licença
-
-Este projeto está sob a licença **MIT**. Veja o arquivo [LICENSE](LICENSE) para detalhes.
+1. Instale o PM2:
+   ```bash
+   npm install -g pm2
+   ```
+2. Inicie o Vite em modo preview ou dev:
+   ```bash
+   pm2 start "npm run dev" --name "cftv-planner"
+   ```
+3. Salve a lista de processos:
+   ```bash
+   pm2 save
+   pm2 startup
+   ```
 
 ---
-
-## 👨‍🔧 Autor
-
-**Tiago Marques**
-Especialista em Redes, CFTV e Automação
+Desenvolvido por **Tiago Marques** - [marques823@gmail.com](mailto:marques823@gmail.com)

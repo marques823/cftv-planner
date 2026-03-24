@@ -125,6 +125,42 @@ export class UIManager {
 
         inspector.classList.add('active');
 
+        if (hit.type === 'multiple') {
+            pnl.innerHTML = `
+                <h3 class="panel-title">Seleção Múltipla</h3>
+                <div class="empty-state" style="padding-top: 10px">
+                    <i data-lucide="layers"></i>
+                    <p><b>${hit.count} itens</b> selecionados</p>
+                    <p style="font-size: 0.8rem; margin-top: 10px; opacity: 0.7">
+                        Arraste qualquer item para mover o grupo.<br>
+                        Shift + Clique para refinar.
+                    </p>
+                </div>
+                <button class="btn-danger-outline" id="btn-delete-multiple" style="margin-top: 20px">
+                    <i data-lucide="trash-2"></i> Excluir Seleção
+                </button>
+            `;
+            
+            pnl.querySelector('#btn-delete-multiple')?.addEventListener('click', () => {
+                if (confirm(`Excluir ${hit.count} itens selecionados?`)) {
+                    // Sort indices descending to avoid splice issues if we used indices
+                    // But project.js methods use indices. Better: just filter them out.
+                    const engine = window.app.engine;
+                    engine.selectedEntities.forEach(s => {
+                        if (s.type === 'camera') window.app.project.cameras = window.app.project.cameras.filter(c => c !== s.entity);
+                        else if (s.type === 'wall') window.app.project.walls = window.app.project.walls.filter(w => w !== s.entity);
+                        else if (s.type === 'label') window.app.project.labels = window.app.project.labels.filter(l => l !== s.entity);
+                    });
+                    engine.selectedEntities = [];
+                    window.app.project.notifyChange();
+                    this.onEntitySelected(null);
+                }
+            });
+            
+            lucide.createIcons();
+            return;
+        }
+
         const entity = hit.entity;
         if (hit.type === 'camera') {
             pnl.innerHTML = `
@@ -302,7 +338,8 @@ export class UIManager {
         container.innerHTML = '';
         this.projects.cameras.forEach((cam, i) => {
             const item = document.createElement('div');
-            item.className = `device-item ${this.engine.selectedEntity?.index === i ? 'selected' : ''}`;
+            const isSelected = this.engine.selectedEntities.length === 1 && this.engine.selectedEntities[0].entity === cam;
+            item.className = `device-item ${isSelected ? 'selected' : ''}`;
             item.innerHTML = `
                 <div class="device-dot" style="background: rgb(${cam.color})"></div>
                 <div class="device-info">
@@ -311,8 +348,8 @@ export class UIManager {
                 </div>
             `;
             item.onclick = () => {
-                this.engine.selectedEntity = { type: 'camera', index: i, entity: cam };
-                this.onEntitySelected(this.engine.selectedEntity);
+                this.engine.selectedEntities = [{ type: 'camera', index: i, entity: cam }];
+                this.onEntitySelected(this.engine.selectedEntities[0]);
                 this.engine.render();
                 this.renderPlacedList();
             };
@@ -559,7 +596,7 @@ export class UIManager {
         document.getElementById('btn-clear-all')?.addEventListener('click', () => {
             if (confirm('Tem certeza que deseja limpar todo o projeto?')) {
                 this.projects.clear();
-                this.engine.selectedEntity = null;
+                this.engine.selectedEntities = [];
                 this.onEntitySelected(null);
             }
         });
@@ -615,7 +652,12 @@ export class UIManager {
                     </button>
                 </div>
             `;
-            document.getElementById('btn-logout').onclick = () => this.auth.signOut();
+            document.getElementById('btn-logout').onclick = async () => {
+                this.projects.clear();
+                localStorage.removeItem('cftv_project_latest');
+                await this.auth.signOut();
+                window.location.reload();
+            };
             document.getElementById('btn-gallery').onclick = () => this.showProjectGallery();
             document.getElementById('btn-new-project').onclick = () => this.showNewProjectWizard();
         } else {
@@ -799,11 +841,12 @@ export class UIManager {
     }
 
     updateEntity(prop, val) {
-        if (!this.engine.selectedEntity) return;
+        if (this.engine.selectedEntities.length !== 1) return;
         this.projects.saveState();
-        this.engine.selectedEntity.entity[prop] = val;
+        const hit = this.engine.selectedEntities[0];
+        hit.entity[prop] = val;
         this.engine.render();
-        this.onEntitySelected(this.engine.selectedEntity);
+        this.onEntitySelected(hit);
     }
 
     setupMetadataActions() {
@@ -877,19 +920,24 @@ export class UIManager {
             case 'm': this.setTool('move'); break;
             case 'escape': 
                 this.setTool('select');
-                this.engine.selectedEntity = null;
+                this.engine.selectedEntities = [];
                 this.onEntitySelected(null);
                 this.engine.render();
                 break;
             case 'delete':
-                if (this.engine.selectedEntity) {
-                    const hit = this.engine.selectedEntity;
-                    if (hit.type === 'camera') this.projects.removeCamera(hit.index);
-                    else if (hit.type === 'wall') this.projects.removeWall(hit.index);
-                    else if (hit.type === 'label') this.projects.removeLabel(hit.index);
-                    this.engine.selectedEntity = null;
-                    this.onEntitySelected(null);
-                    this.engine.render();
+                if (this.engine.selectedEntities.length > 0) {
+                    if (confirm(`Excluir ${this.engine.selectedEntities.length} itens selecionados?`)) {
+                        this.projects.saveState();
+                        this.engine.selectedEntities.forEach(s => {
+                            if (s.type === 'camera') this.projects.cameras = this.projects.cameras.filter(c => c !== s.entity);
+                            else if (s.type === 'wall') this.projects.walls = this.projects.walls.filter(w => w !== s.entity);
+                            else if (s.type === 'label') this.projects.labels = this.projects.labels.filter(l => l !== s.entity);
+                        });
+                        this.engine.selectedEntities = [];
+                        this.onEntitySelected(null);
+                        this.engine.render();
+                        this.renderPlacedList();
+                    }
                 }
                 break;
         }

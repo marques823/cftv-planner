@@ -896,3 +896,52 @@ canvas {
         display: none;
     }
 }
+
+/* Footer Credits & Links */
+.app-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    font-size: 11px;
+}
+
+.credits {
+    margin-left: 15px;
+    color: var(--text-muted);
+}
+
+.footer-link {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer-link:hover {
+    color: var(--primary-light);
+    text-decoration: underline;
+}
+
+.git-link {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+}
+
+.git-link i {
+    width: 14px;
+    height: 14px;
+}
+
+.version {
+    margin-left: 10px;
+    opacity: 0.7;
+}
+
+.divider {
+    width: 1px;
+    height: 12px;
+    background: var(--border);
+    margin: 0 10px;
+}
