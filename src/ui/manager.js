@@ -437,7 +437,21 @@ export class UIManager {
     showBOM() {
         const bom = this.projects.getBOM();
         const pnl = document.getElementById('inspector-content');
+        const inspector = document.querySelector('.inspector');
         
+        if (inspector) inspector.classList.add('active');
+        
+        if (bom.length === 0) {
+            pnl.innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="camera-off"></i>
+                    <p>Nenhuma câmera posicionada para gerar a lista de materiais.</p>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
         pnl.innerHTML = `
             <div class="bom-container">
                 <h3 class="section-title">Lista de Materiais</h3>
@@ -575,6 +589,10 @@ export class UIManager {
 
         // 4. Generate Report Window
         const printWin = window.open('', '_blank');
+        if (!printWin) {
+            alert('Por favor, permita pop-ups para gerar o relatório.');
+            return;
+        }
         printWin.document.write(`
             <html>
                 <head>
@@ -668,7 +686,7 @@ export class UIManager {
     onProjectUpdate(stats) {
         document.getElementById('hdr-cams').textContent = stats.cameraCount || 0;
         document.getElementById('hdr-walls').textContent = stats.wallCount || 0;
-        const obstaclesCount = window.app.projects.obstacles.length;
+        const obstaclesCount = this.projects.obstacles ? this.projects.obstacles.length : 0;
         if (document.getElementById('hdr-obstacles')) {
             document.getElementById('hdr-obstacles').textContent = obstaclesCount;
         }
