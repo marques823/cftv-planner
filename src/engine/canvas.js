@@ -1,4 +1,4 @@
-import { Camera, Wall, TextLabel, Obstacle } from './entities.js';
+import { Camera, Wall, TextLabel, Obstacle, FreeDraw } from './entities.js';
 
 const SCALE = 10; // 10px = 1m
 
@@ -344,7 +344,8 @@ export class CanvasEngine {
             this.currentDrawing = new FreeDraw({
                 points: [{ x: worldPos.x, y: worldPos.y }],
                 color: '255,255,255',
-                lineWidth: 3
+                lineWidth: 3,
+                isObstacle: false
             });
             this.render();
             return;
@@ -1016,7 +1017,7 @@ export class CanvasEngine {
         this.project.cameras.forEach(c => {
             const isSelected = this.selectedEntities.some(s => s.entity === c);
             const isHovered = this.hoveredEntity?.entity === c;
-            c.drawFOV(ctx, this.zoom, isSelected, this.project.walls, this.project.obstacles);
+            c.drawFOV(ctx, this.zoom, isSelected, this.project.walls, this.project.obstacles, this.project.drawings);
             c.draw(ctx, this.zoom, isSelected, isHovered);
         });
 

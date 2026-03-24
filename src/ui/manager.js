@@ -307,6 +307,10 @@ export class UIManager {
                     <label>Espessura do Traço: <span class="val">${entity.lineWidth}px</span></label>
                     <input type="range" min="1" max="20" step="1" value="${entity.lineWidth}" data-prop="lineWidth">
                 </div>
+                <div class="prop-group" style="flex-direction: row; justify-content: space-between; align-items: center">
+                    <label style="margin:0">Bloquear Visão (Obstáculo)</label>
+                    <input type="checkbox" ${entity.isObstacle ? 'checked' : ''} data-prop="isObstacle" data-type="bool">
+                </div>
                 ` : `
                 <div class="prop-group">
                     <label>${isObstacle ? 'Texto Opcional' : 'Conteúdo do Texto'}</label>

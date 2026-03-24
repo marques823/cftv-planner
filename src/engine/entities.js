@@ -111,6 +111,7 @@ export class Camera {
 
             // Ray-Obstacle Intersection (Circles)
             const obs = arguments[4] || []; // Optional obstacles array
+            const drawings = arguments[5] || []; // Optional drawings array
             obs.forEach(o => {
                 if (!o.isObstacle) return;
                 const intersect = this.getCircleIntersection(
@@ -121,6 +122,24 @@ export class Camera {
                 if (intersect && intersect.dist < closestDist) {
                     closestDist = intersect.dist;
                     hitPoint = { x: intersect.x, y: intersect.y };
+                }
+            });
+
+            // Ray-Drawing Intersection (Segments)
+            drawings.forEach(d => {
+                if (d.isObstacle && d.points.length >= 2) {
+                    for (let j = 0; j < d.points.length - 1; j++) {
+                        const intersect = this.getIntersection(
+                            { x: this.x, y: this.y },
+                            { x: targetX, y: targetY },
+                            d.points[j],
+                            d.points[j+1]
+                        );
+                        if (intersect && intersect.dist < closestDist) {
+                            closestDist = intersect.dist;
+                            hitPoint = { x: intersect.x, y: intersect.y };
+                        }
+                    }
                 }
             });
 
@@ -538,6 +557,7 @@ export class FreeDraw {
         this.points = config.points || []; // Array of {x, y}
         this.color = config.color || '255,255,255';
         this.lineWidth = config.lineWidth || 2;
+        this.isObstacle = config.isObstacle || false;
     }
 
     draw(ctx, zoom, isSelected, isHovered) {
