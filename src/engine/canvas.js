@@ -292,6 +292,7 @@ export class CanvasEngine {
             if (this.isRotatingNewCamera) {
                 this.isRotatingNewCamera = false;
                 this.rotatingCamera = null;
+                window.app.ui.onEntitySelected(this.selectedEntities[0]);
                 this.render();
                 return;
             }
@@ -309,7 +310,6 @@ export class CanvasEngine {
                 this.selectedEntities = [{ type: 'camera', index: this.project.cameras.length - 1, entity: newCam }];
                 this.isRotatingNewCamera = true;
                 this.rotatingCamera = newCam;
-                window.app.ui.onEntitySelected(this.selectedEntities[0]);
             }
         } else if (tool === 'wall') {
             this.isPanning = false; // never pan while placing wall points
