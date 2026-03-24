@@ -103,7 +103,7 @@ export class CanvasEngine {
         };
     }
 
-    snap(v, g = 0.1) {
+    snap(v, g = 0.05) {
         return Math.round(v / g) * g;
     }
 
@@ -180,18 +180,29 @@ export class CanvasEngine {
             if (dist < Math.max(radius, 15 / this.zoom)) return { type: 'obstacle', index: i, entity: o };
         }
 
-        // Check drawings (rough bounding box hit test)
+        // Check drawings (Refined: stroke-based hit detection)
+        const hitRadius = 10 / this.zoom;
         for (let i = this.project.drawings.length - 1; i >= 0; i--) {
             const d = this.project.drawings[i];
-            if (d.points.length === 0) continue;
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            d.points.forEach(p => {
-                minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-                maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
-            });
-            const pad = 10 / this.zoom;
-            if (wx >= minX - pad && wx <= maxX + pad && wy >= minY - pad && wy <= maxY + pad) {
-                return { type: 'drawing', index: i, entity: d };
+            if (d.points.length < 2) continue;
+            
+            for (let j = 0; j < d.points.length - 1; j++) {
+                const p1 = d.points[j];
+                const p2 = d.points[j + 1];
+                
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const len2 = dx * dx + dy * dy;
+                if (len2 === 0) continue;
+
+                const t = Math.max(0, Math.min(1, ((wx - p1.x) * dx + (wy - p1.y) * dy) / len2));
+                const projX = p1.x + t * dx;
+                const projY = p1.y + t * dy;
+                const dist = Math.sqrt((wx - projX) ** 2 + (wy - projY) ** 2);
+
+                if (dist < hitRadius) {
+                    return { type: 'drawing', index: i, entity: d };
+                }
             }
         }
 
@@ -199,7 +210,7 @@ export class CanvasEngine {
     }
 
     getSnapPoint(wx, wy, excludeWall = null) {
-        const snapRadius = 20 / this.zoom;
+        const snapRadius = 10 / this.zoom;
         for (const w of this.project.walls) {
             if (w === excludeWall) continue;
             const d1 = Math.sqrt((w.x1 - wx) ** 2 + (w.y1 - wy) ** 2);
@@ -210,7 +221,7 @@ export class CanvasEngine {
         return null;
     }
 
-    getAngleSnap(px, py, pivotX, pivotY, interval = 45, threshold = 5) {
+    getAngleSnap(px, py, pivotX, pivotY, interval = 45, threshold = 3) {
         const dx = px - pivotX;
         const dy = py - pivotY;
         const currentAngleRad = Math.atan2(dy, dx);
@@ -347,6 +358,7 @@ export class CanvasEngine {
                 lineWidth: 3,
                 isObstacle: false
             });
+            window.app.ui.toggleInspector(false); // Hide inspector when starting a draw
             this.render();
             return;
         } else if (tool === 'wall') {
@@ -355,7 +367,7 @@ export class CanvasEngine {
             const sy = this.snap(worldPos.y);
 
             // Helper: find closest existing wall point within snap radius (endpoints or bodies)
-            const snapRadius = 20 / this.zoom;
+            const snapRadius = 10 / this.zoom;
             const findSnapPoint = (px, py) => {
                 // Check endpoints first
                 for (const w of this.project.walls) {
@@ -493,8 +505,9 @@ export class CanvasEngine {
                         this.selectedEntities = [hit];
                     }
                 }
-
+ 
                 this.isDragging = true;
+                window.app.ui.toggleInspector(false);
                 // Store initial offsets for all selected entities
                 this.dragOffsets = this.selectedEntities.map(s => {
                     const off = {};
@@ -506,7 +519,17 @@ export class CanvasEngine {
                         off.y1 = worldPos.y - (s.entity.y1 || 0);
                         off.x2 = worldPos.x - (s.entity.x2 || 0);
                         off.y2 = worldPos.y - (s.entity.y2 || 0);
-                        if (s.type === 'wall-endpoint') off.which = s.which;
+                        if (s.type === 'wall-endpoint') {
+                            off.which = s.which;
+                            // Find all walls sharing this point
+                            const wx = s.which === 'p1' ? s.entity.x1 : s.entity.x2;
+                            const wy = s.which === 'p1' ? s.entity.y1 : s.entity.y2;
+                            s.connectedEndpoints = [];
+                            this.project.walls.forEach(w => {
+                                if (Math.abs(w.x1 - wx) < 0.01 && Math.abs(w.y1 - wy) < 0.01) s.connectedEndpoints.push({ wall: w, which: 'p1' });
+                                if (Math.abs(w.x2 - wx) < 0.01 && Math.abs(w.y2 - wy) < 0.01) s.connectedEndpoints.push({ wall: w, which: 'p2' });
+                            });
+                        }
                     } else if (s.type === 'drawing') {
                         off.x = worldPos.x;
                         off.y = worldPos.y;
@@ -661,15 +684,31 @@ export class CanvasEngine {
                     // If not snapped to a corner, try snapping to 45 degree angles
                     if (!snapped) {
                         const pivot = off.which === 'p1' ? { x: s.entity.x2, y: s.entity.y2 } : { x: s.entity.x1, y: s.entity.y1 };
-                        snapped = this.getAngleSnap(worldPos.x, worldPos.y, pivot.x, pivot.y, 45, 5);
+                        snapped = this.getAngleSnap(worldPos.x, worldPos.y, pivot.x, pivot.y, 45, 3);
                     }
 
-                    if (off.which === 'p1') {
-                        s.entity.x1 = snapped ? snapped.x : this.snap(worldPos.x);
-                        s.entity.y1 = snapped ? snapped.y : this.snap(worldPos.y);
+                    const nx = snapped ? snapped.x : this.snap(worldPos.x);
+                    const ny = snapped ? snapped.y : this.snap(worldPos.y);
+
+                    if (s.connectedEndpoints && s.connectedEndpoints.length > 0) {
+                        s.connectedEndpoints.forEach(conn => {
+                            if (conn.which === 'p1') {
+                                conn.wall.x1 = nx;
+                                conn.wall.y1 = ny;
+                            } else {
+                                conn.wall.x2 = nx;
+                                conn.wall.y2 = ny;
+                            }
+                        });
                     } else {
-                        s.entity.x2 = snapped ? snapped.x : this.snap(worldPos.x);
-                        s.entity.y2 = snapped ? snapped.y : this.snap(worldPos.y);
+                        // Fallback for single movement if for some reason connections weren't found
+                        if (off.which === 'p1') {
+                            s.entity.x1 = nx;
+                            s.entity.y1 = ny;
+                        } else {
+                            s.entity.x2 = nx;
+                            s.entity.y2 = ny;
+                        }
                     }
                 }
             });
@@ -755,7 +794,7 @@ export class CanvasEngine {
             
             // Alignment guides
             this.alignmentGuides = [];
-            const threshold = 10; // Pixels distance to snap
+            const threshold = 5; // Pixels distance to snap
             
             this.project.walls.forEach(w => {
                 const points = [{x: w.x1, y: w.y1}, {x: w.x2, y: w.y2}];
@@ -820,6 +859,10 @@ export class CanvasEngine {
             }
 
             window.app.ui.onEntitySelected(this.selectedEntities.length === 1 ? this.selectedEntities[0] : (this.selectedEntities.length > 1 ? { type: 'multiple', count: this.selectedEntities.length } : null));
+        }
+
+        if (this.isDragging && this.selectedEntities.length > 0) {
+            window.app.ui.onEntitySelected(this.selectedEntities.length === 1 ? this.selectedEntities[0] : { type: 'multiple', count: this.selectedEntities.length });
         }
 
         this.pointers.delete(e.pointerId);

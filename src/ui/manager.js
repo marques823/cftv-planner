@@ -9,6 +9,7 @@ export class UIManager {
         this.currentTool = 'select';
         this.selectedModel = CATALOG[0];
         this.brandFilter = 'all';
+        this.inspectorAutoOpen = false;
     }
 
     async init() {
@@ -17,6 +18,7 @@ export class UIManager {
         this.setupSettingsActions();
         this.setupMetadataActions();
         this.setupThemeToggle();
+        this.setupInspectorToggle();
         this.renderCatalog();
         this.setupCatalogFilters();
         
@@ -110,11 +112,23 @@ export class UIManager {
         });
     }
 
+    toggleInspector(visible) {
+        const inspector = document.querySelector('.inspector');
+        if (!inspector) return;
+        if (visible) {
+            inspector.classList.add('active');
+        } else {
+            inspector.classList.remove('active');
+        }
+    }
+
     onEntitySelected(hit) {
         const pnl = document.getElementById('inspector-content');
         const inspector = document.querySelector('.inspector');
+        const badge = document.getElementById('selection-badge');
         
         if (!hit) {
+            badge?.classList.add('hidden');
             inspector.classList.remove('active');
             pnl.innerHTML = `
                 <div class="empty-state">
@@ -126,7 +140,11 @@ export class UIManager {
             return;
         }
 
-        inspector.classList.add('active');
+        badge?.classList.remove('hidden');
+
+        if (this.inspectorAutoOpen) {
+            inspector.classList.add('active');
+        }
 
         if (hit.type === 'multiple') {
             pnl.innerHTML = `
@@ -681,6 +699,19 @@ export class UIManager {
         setTimeout(() => {
             printWin.print();
         }, 800);
+    }
+
+    setupInspectorToggle() {
+        const btn = document.getElementById('btn-inspector-toggle');
+        const inspector = document.querySelector('.inspector');
+        btn?.addEventListener('click', () => {
+            const isActive = inspector.classList.toggle('active');
+            if (isActive) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
     }
 
     onProjectUpdate(stats) {
