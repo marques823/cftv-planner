@@ -595,3 +595,74 @@ export class FreeDraw {
         }));
     }
 }
+
+export class Cable extends FreeDraw {
+    constructor(config) {
+        super(config);
+        this.type = 'cable';
+        this.cableType = config.cableType || 'UTP Cat5e'; // Default
+        this.cameraRef = config.cameraRef || null; // Potential binding to a camera
+    }
+
+    getLength() {
+        if (this.points.length < 2) return 0;
+        let total = 0;
+        for (let i = 1; i < this.points.length; i++) {
+            const dx = this.points[i].x - this.points[i-1].x;
+            const dy = this.points[i].y - this.points[i-1].y;
+            total += Math.sqrt(dx * dx + dy * dy);
+        }
+        return total / 10; // Assuming 10px = 1m (SCALE from canvas.js)
+    }
+
+    draw(ctx, zoom, isSelected, isHovered) {
+        ctx.save();
+        ctx.setLineDash([10 / zoom, 5 / zoom]); // Dashed line for cables
+        super.draw(ctx, zoom, isSelected, isHovered);
+        ctx.restore();
+
+        // If selected, show length
+        if (isSelected && this.points.length >= 2) {
+            const mid = this.points[Math.floor(this.points.length / 2)];
+            ctx.font = `600 ${12 / zoom}px "Inter", sans-serif`;
+            ctx.fillStyle = '#f59e0b';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${this.getLength().toFixed(1)}m`, mid.x, mid.y - 10 / zoom);
+        }
+    }
+}
+
+export class Rack extends Obstacle {
+    constructor(config) {
+        super({
+            ...config,
+            type: 'box',
+            r: config.r || 15 // Standard size for rack icon
+        });
+        this.id = config.id || Math.random().toString(36).substr(2, 9);
+        this.isRack = true;
+        this.uSize = config.uSize || 12; // 12U standard
+        this.color = config.color || '100,100,100';
+        this.text = config.text || `${this.uSize}U Rack`;
+    }
+
+    draw(ctx, zoom, isSelected, isHovered) {
+        super.draw(ctx, zoom, isSelected, isHovered);
+        
+        const r = this.r;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        // Draw some rack-like details (horizontal lines)
+        ctx.strokeStyle = `rgba(255, 255, 255, 0.2)`;
+        ctx.lineWidth = 1 / zoom;
+        for(let i = -r + 5; i < r; i += 5) {
+            ctx.beginPath();
+            ctx.moveTo(-r + 2, i);
+            ctx.lineTo(r - 2, i);
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+    }
+}

@@ -432,17 +432,30 @@ export class CanvasEngine {
             });
             this.project.addLabel(newLabel);
             window.app.ui.onEntitySelected(this.selectedEntities[0]);
-        } else if (tool === 'obstacle') {
-            const newObs = new Obstacle({
+        } else if (tool === 'obstacle' || tool === 'rack') {
+            const isRack = tool === 'rack';
+            const obs = isRack ? new Rack({
+                x: worldPos.x,
+                y: worldPos.y,
+                uSize: 12
+            }) : new Obstacle({
                 x: worldPos.x,
                 y: worldPos.y,
                 type: 'tree',
                 radius: 1,
                 isObstacle: true
             });
-            this.project.addObstacle(newObs);
-            this.selectedEntities = [{ type: 'obstacle', index: this.project.obstacles.length - 1, entity: newObs }];
+            this.project.addObstacle(obs);
+            this.selectedEntities = [{ type: 'obstacle', index: this.project.obstacles.length - 1, entity: obs }];
             window.app.ui.onEntitySelected(this.selectedEntities[0]);
+        } else if (tool === 'cable') {
+            this.isDrawingFreehand = true;
+            this.currentDrawing = new Cable({
+                points: [worldPos],
+                color: '245,158,11', // Amber/Orange
+                lineWidth: 3
+            });
+            this.project.addDrawing(this.currentDrawing);
         } else if (tool === 'door' || tool === 'window') {
             if (this.previewElement) {
                 this.project.saveState();
@@ -514,6 +527,9 @@ export class CanvasEngine {
                     if (s.type === 'camera' || s.type === 'label' || s.type === 'obstacle') {
                         off.x = worldPos.x - s.entity.x;
                         off.y = worldPos.y - s.entity.y;
+                    } else if (s.type === 'drawing' || s.type === 'cable') {
+                        off.x = worldPos.x;
+                        off.y = worldPos.y;
                     } else if (s.type === 'wall' || s.type === 'wall-endpoint') {
                         off.x1 = worldPos.x - (s.entity.x1 || 0);
                         off.y1 = worldPos.y - (s.entity.y1 || 0);

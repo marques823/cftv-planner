@@ -1,5 +1,6 @@
 import { CATALOG } from '../engine/catalog.js';
 import { AuthService } from '../services/auth.js';
+import { BOMManager } from './bom-ui.js';
 
 export class UIManager {
     constructor(engine, projects) {
@@ -10,6 +11,7 @@ export class UIManager {
         this.selectedModel = CATALOG[0];
         this.brandFilter = 'all';
         this.inspectorAutoOpen = false;
+        this.bom = new BOMManager(projects);
     }
 
     async init() {
@@ -19,6 +21,7 @@ export class UIManager {
         this.setupMetadataActions();
         this.setupThemeToggle();
         this.setupInspectorToggle();
+        this.setupBOMActions();
         this.renderCatalog();
         this.setupCatalogFilters();
         
@@ -711,6 +714,14 @@ export class UIManager {
             } else {
                 btn.classList.remove('active');
             }
+        });
+    }
+
+    setupBOMActions() {
+        const btn = document.getElementById('btn-bom');
+        btn?.addEventListener('click', () => {
+             // Logic to open BOM modal (will be implemented in bom-ui.js)
+             window.dispatchEvent(new CustomEvent('open-bom'));
         });
     }
 
