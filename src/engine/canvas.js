@@ -507,6 +507,9 @@ export class CanvasEngine {
                         off.x2 = worldPos.x - (s.entity.x2 || 0);
                         off.y2 = worldPos.y - (s.entity.y2 || 0);
                         if (s.type === 'wall-endpoint') off.which = s.which;
+                    } else if (s.type === 'drawing') {
+                        off.x = worldPos.x;
+                        off.y = worldPos.y;
                     }
                     return off;
                 });
@@ -646,6 +649,12 @@ export class CanvasEngine {
                     s.entity.y1 = ny1;
                     s.entity.x2 = nx2;
                     s.entity.y2 = ny2;
+                } else if (s.type === 'drawing') {
+                    const dx = worldPos.x - off.x;
+                    const dy = worldPos.y - off.y;
+                    s.entity.move(dx, dy);
+                    off.x = worldPos.x;
+                    off.y = worldPos.y;
                 } else if (s.type === 'wall-endpoint') {
                     let snapped = this.getSnapPoint(worldPos.x, worldPos.y, s.entity);
                     

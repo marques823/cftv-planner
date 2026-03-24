@@ -564,16 +564,17 @@ export class FreeDraw {
         if (this.points.length < 2) return;
 
         ctx.save();
+        
+        ctx.strokeStyle = `rgb(${this.color})`;
+        ctx.lineWidth = this.lineWidth / zoom;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
         ctx.beginPath();
         ctx.moveTo(this.points[0].x, this.points[0].y);
         for (let i = 1; i < this.points.length; i++) {
             ctx.lineTo(this.points[i].x, this.points[i].y);
         }
-
-        ctx.strokeStyle = `rgb(${this.color})`;
-        ctx.lineWidth = this.lineWidth / zoom;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
         ctx.stroke();
 
         if (isSelected || isHovered) {
@@ -585,5 +586,12 @@ export class FreeDraw {
         }
 
         ctx.restore();
+    }
+
+    move(dx, dy) {
+        this.points = this.points.map(p => ({
+            x: p.x + dx,
+            y: p.y + dy
+        }));
     }
 }
