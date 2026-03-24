@@ -1,6 +1,6 @@
 import { saveProjectToCloud } from './supabase.js';
 import { HistoryManager } from './history.js';
-import { Camera, Wall, TextLabel } from '../engine/entities.js';
+import { Camera, Wall, TextLabel, Obstacle, FreeDraw } from '../engine/entities.js';
 
 export class ProjectManager {
     constructor() {
@@ -8,6 +8,8 @@ export class ProjectManager {
         this.cameras = [];
         this.walls = [];
         this.labels = []; // New labels array
+        this.obstacles = []; // New obstacles (trees, posts, etc.)
+        this.drawings = []; // New free-hand drawing strokes
         this.metadata = {
             name: "Projeto sem título",
             client: "",
@@ -34,6 +36,8 @@ export class ProjectManager {
             cameras: JSON.parse(JSON.stringify(this.cameras)),
             walls: JSON.parse(JSON.stringify(this.walls)),
             labels: JSON.parse(JSON.stringify(this.labels)),
+            obstacles: JSON.parse(JSON.stringify(this.obstacles)),
+            drawings: JSON.parse(JSON.stringify(this.drawings)),
             settings: JSON.parse(JSON.stringify(this.settings))
         });
     }
@@ -43,6 +47,8 @@ export class ProjectManager {
             cameras: JSON.parse(JSON.stringify(this.cameras)),
             walls: JSON.parse(JSON.stringify(this.walls)),
             labels: JSON.parse(JSON.stringify(this.labels)),
+            obstacles: JSON.parse(JSON.stringify(this.obstacles)),
+            drawings: JSON.parse(JSON.stringify(this.drawings)),
             settings: JSON.parse(JSON.stringify(this.settings))
         });
         if (state) this.applyState(state);
@@ -53,6 +59,8 @@ export class ProjectManager {
             cameras: JSON.parse(JSON.stringify(this.cameras)),
             walls: JSON.parse(JSON.stringify(this.walls)),
             labels: JSON.parse(JSON.stringify(this.labels)),
+            obstacles: JSON.parse(JSON.stringify(this.obstacles)),
+            drawings: JSON.parse(JSON.stringify(this.drawings)),
             settings: JSON.parse(JSON.stringify(this.settings))
         });
         if (state) this.applyState(state);
@@ -101,12 +109,38 @@ export class ProjectManager {
         this.notifyChange();
     }
 
+    addObstacle(obs) {
+        this.saveState();
+        this.obstacles.push(obs);
+        this.notifyChange();
+    }
+
+    removeObstacle(index) {
+        this.saveState();
+        this.obstacles.splice(index, 1);
+        this.notifyChange();
+    }
+
+    addDrawing(drawing) {
+        this.saveState();
+        this.drawings.push(drawing);
+        this.notifyChange();
+    }
+
+    removeDrawing(index) {
+        this.saveState();
+        this.drawings.splice(index, 1);
+        this.notifyChange();
+    }
+
     clear() {
         this.saveState();
         this.id = null; // Clear cloud ID for new project
         this.cameras = [];
         this.walls = [];
         this.labels = [];
+        this.obstacles = [];
+        this.drawings = [];
         this.metadata = {
             name: "Novo Projeto",
             client: "",
@@ -153,6 +187,8 @@ export class ProjectManager {
             cameras: this.cameras,
             walls: this.walls,
             labels: this.labels,
+            obstacles: this.obstacles,
+            drawings: this.drawings,
             settings: this.settings,
             id: this.id // Place at the end to ensure it's not overwritten by spread
         });
@@ -206,7 +242,8 @@ export class ProjectManager {
             this.cameras = (data.cameras || []).map(c => new Camera(c));
             this.walls = (data.walls || []).map(w => new Wall(w.x1, w.y1, w.x2, w.y2, w.color, w.showMeasurements, w.elements));
             this.labels = (data.labels || []).map(l => new TextLabel(l));
-            this.labels = (data.labels || []).map(l => new TextLabel(l));
+            this.obstacles = (data.obstacles || []).map(o => new Obstacle(o));
+            this.drawings = (data.drawings || []).map(d => new FreeDraw(d));
             
             this.notifyChange();
         } catch (e) {

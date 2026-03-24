@@ -1,4 +1,4 @@
-import { Camera, Wall, TextLabel } from './entities.js';
+import { Camera, Wall, TextLabel, Obstacle, FreeDraw } from './entities.js';
 
 const SCALE = 10; // 10px = 1m
 
@@ -22,6 +22,9 @@ export class CanvasEngine {
         this.isSelectionBox = false;
         this.selectionStart = null;
         this.selectionEnd = null;
+        
+        this.isDrawingFreehand = false;
+        this.currentDrawing = null;
         
         this.lastMouseX = 0;
         this.lastMouseY = 0;
@@ -100,7 +103,7 @@ export class CanvasEngine {
         };
     }
 
-    snap(v, g = 0.1) {
+    snap(v, g = 0.05) {
         return Math.round(v / g) * g;
     }
 
@@ -167,6 +170,77 @@ export class CanvasEngine {
             if (dist < 20 / this.zoom) return { type: 'label', index: i, entity: l };
         }
 
+        // Check obstacles
+        for (let i = this.project.obstacles.length - 1; i >= 0; i--) {
+            const o = this.project.obstacles[i];
+            const dx = o.x - wx;
+            const dy = o.y - wy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const radius = (o.radius || 0.5) * 10;
+            if (dist < Math.max(radius, 15 / this.zoom)) return { type: 'obstacle', index: i, entity: o };
+        }
+
+        // Check drawings (Refined: stroke-based hit detection)
+        const hitRadius = 10 / this.zoom;
+        for (let i = this.project.drawings.length - 1; i >= 0; i--) {
+            const d = this.project.drawings[i];
+            if (d.points.length < 2) continue;
+            
+            for (let j = 0; j < d.points.length - 1; j++) {
+                const p1 = d.points[j];
+                const p2 = d.points[j + 1];
+                
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const len2 = dx * dx + dy * dy;
+                if (len2 === 0) continue;
+
+                const t = Math.max(0, Math.min(1, ((wx - p1.x) * dx + (wy - p1.y) * dy) / len2));
+                const projX = p1.x + t * dx;
+                const projY = p1.y + t * dy;
+                const dist = Math.sqrt((wx - projX) ** 2 + (wy - projY) ** 2);
+
+                if (dist < hitRadius) {
+                    return { type: 'drawing', index: i, entity: d };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    getSnapPoint(wx, wy, excludeWall = null) {
+        const snapRadius = 10 / this.zoom;
+        for (const w of this.project.walls) {
+            if (w === excludeWall) continue;
+            const d1 = Math.sqrt((w.x1 - wx) ** 2 + (w.y1 - wy) ** 2);
+            if (d1 < snapRadius) return { x: w.x1, y: w.y1 };
+            const d2 = Math.sqrt((w.x2 - wx) ** 2 + (w.y2 - wy) ** 2);
+            if (d2 < snapRadius) return { x: w.x2, y: w.y2 };
+        }
+        return null;
+    }
+
+    getAngleSnap(px, py, pivotX, pivotY, interval = 45, threshold = 3) {
+        const dx = px - pivotX;
+        const dy = py - pivotY;
+        const currentAngleRad = Math.atan2(dy, dx);
+        const currentAngleDeg = (currentAngleRad * 180) / Math.PI;
+        
+        // Normalize to 0-360
+        let normAngle = (currentAngleDeg + 360) % 360;
+        
+        // Find nearest interval
+        const snappedAngleDeg = Math.round(normAngle / interval) * interval;
+        
+        if (Math.abs(normAngle - snappedAngleDeg) < threshold || Math.abs(normAngle - (snappedAngleDeg - 360)) < threshold || Math.abs(normAngle - (snappedAngleDeg + 360)) < threshold) {
+            const rad = snappedAngleDeg * Math.PI / 180;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            return {
+                x: pivotX + Math.cos(rad) * dist,
+                y: pivotY + Math.sin(rad) * dist
+            };
+        }
         return null;
     }
 
@@ -254,6 +328,13 @@ export class CanvasEngine {
                 this.measureEnd = null;
             }
         } else if (tool === 'camera') {
+            if (this.isRotatingNewCamera) {
+                this.isRotatingNewCamera = false;
+                this.rotatingCamera = null;
+                window.app.ui.onEntitySelected(this.selectedEntities[0]);
+                this.render();
+                return;
+            }
             const model = window.app.ui.selectedModel;
             if (model) {
                 const sx = this.snap(worldPos.x);
@@ -268,15 +349,25 @@ export class CanvasEngine {
                 this.selectedEntities = [{ type: 'camera', index: this.project.cameras.length - 1, entity: newCam }];
                 this.isRotatingNewCamera = true;
                 this.rotatingCamera = newCam;
-                window.app.ui.onEntitySelected(this.selectedEntities[0]);
             }
+        } else if (tool === 'draw') {
+            this.isDrawingFreehand = true;
+            this.currentDrawing = new FreeDraw({
+                points: [{ x: worldPos.x, y: worldPos.y }],
+                color: '255,255,255',
+                lineWidth: 3,
+                isObstacle: false
+            });
+            window.app.ui.toggleInspector(false); // Hide inspector when starting a draw
+            this.render();
+            return;
         } else if (tool === 'wall') {
             this.isPanning = false; // never pan while placing wall points
             const sx = this.snap(worldPos.x);
             const sy = this.snap(worldPos.y);
 
             // Helper: find closest existing wall point within snap radius (endpoints or bodies)
-            const snapRadius = 20 / this.zoom;
+            const snapRadius = 10 / this.zoom;
             const findSnapPoint = (px, py) => {
                 // Check endpoints first
                 for (const w of this.project.walls) {
@@ -340,7 +431,17 @@ export class CanvasEngine {
                 text: 'Nova Anotação'
             });
             this.project.addLabel(newLabel);
-            this.selectedEntities = [{ type: 'label', index: this.project.labels.length - 1, entity: newLabel }];
+            window.app.ui.onEntitySelected(this.selectedEntities[0]);
+        } else if (tool === 'obstacle') {
+            const newObs = new Obstacle({
+                x: worldPos.x,
+                y: worldPos.y,
+                type: 'tree',
+                radius: 1,
+                isObstacle: true
+            });
+            this.project.addObstacle(newObs);
+            this.selectedEntities = [{ type: 'obstacle', index: this.project.obstacles.length - 1, entity: newObs }];
             window.app.ui.onEntitySelected(this.selectedEntities[0]);
         } else if (tool === 'door' || tool === 'window') {
             if (this.previewElement) {
@@ -372,6 +473,8 @@ export class CanvasEngine {
                 if (hit.type === 'camera') this.project.removeCamera(hit.index);
                 else if (hit.type === 'wall') this.project.removeWall(hit.index);
                 else if (hit.type === 'label') this.project.removeLabel(hit.index);
+                else if (hit.type === 'obstacle') this.project.removeObstacle(hit.index);
+                else if (hit.type === 'drawing') this.project.removeDrawing(hit.index);
                 this.selectedEntities = [];
                 window.app.ui.onEntitySelected(null);
             }
@@ -382,7 +485,13 @@ export class CanvasEngine {
 
             if (hit) {
                 this.isPanning = false;
-                const alreadySelectedIdx = this.selectedEntities.findIndex(s => s.entity === hit.entity);
+                
+                // When clicking an endpoint of an already selected wall, we want to prioritize that endpoint
+                const alreadySelectedIdx = this.selectedEntities.findIndex(s => 
+                    s.entity === hit.entity && 
+                    s.type === hit.type && 
+                    (s.type !== 'wall-endpoint' || s.which === hit.which)
+                );
 
                 if (isShift) {
                     if (alreadySelectedIdx >= 0) {
@@ -391,16 +500,18 @@ export class CanvasEngine {
                         this.selectedEntities.push(hit);
                     }
                 } else {
+                    // If we didn't hit the exact same thing (including type/which), replace selection
                     if (alreadySelectedIdx < 0) {
                         this.selectedEntities = [hit];
                     }
                 }
-
+ 
                 this.isDragging = true;
+                window.app.ui.toggleInspector(false);
                 // Store initial offsets for all selected entities
                 this.dragOffsets = this.selectedEntities.map(s => {
                     const off = {};
-                    if (s.type === 'camera' || s.type === 'label') {
+                    if (s.type === 'camera' || s.type === 'label' || s.type === 'obstacle') {
                         off.x = worldPos.x - s.entity.x;
                         off.y = worldPos.y - s.entity.y;
                     } else if (s.type === 'wall' || s.type === 'wall-endpoint') {
@@ -408,7 +519,20 @@ export class CanvasEngine {
                         off.y1 = worldPos.y - (s.entity.y1 || 0);
                         off.x2 = worldPos.x - (s.entity.x2 || 0);
                         off.y2 = worldPos.y - (s.entity.y2 || 0);
-                        if (s.type === 'wall-endpoint') off.which = s.which;
+                        if (s.type === 'wall-endpoint') {
+                            off.which = s.which;
+                            // Find all walls sharing this point
+                            const wx = s.which === 'p1' ? s.entity.x1 : s.entity.x2;
+                            const wy = s.which === 'p1' ? s.entity.y1 : s.entity.y2;
+                            s.connectedEndpoints = [];
+                            this.project.walls.forEach(w => {
+                                if (Math.abs(w.x1 - wx) < 0.01 && Math.abs(w.y1 - wy) < 0.01) s.connectedEndpoints.push({ wall: w, which: 'p1' });
+                                if (Math.abs(w.x2 - wx) < 0.01 && Math.abs(w.y2 - wy) < 0.01) s.connectedEndpoints.push({ wall: w, which: 'p2' });
+                            });
+                        }
+                    } else if (s.type === 'drawing') {
+                        off.x = worldPos.x;
+                        off.y = worldPos.y;
                     }
                     return off;
                 });
@@ -502,27 +626,89 @@ export class CanvasEngine {
             return;
         }
 
+        if (this.isDrawingFreehand && this.currentDrawing) {
+            const lastPoint = this.currentDrawing.points[this.currentDrawing.points.length - 1];
+            const dist = Math.sqrt((worldPos.x - lastPoint.x) ** 2 + (worldPos.y - lastPoint.y) ** 2);
+            if (dist > 2 / this.zoom) {
+                this.currentDrawing.points.push({ x: worldPos.x, y: worldPos.y });
+                this.render();
+            }
+            return;
+        }
+
         if (this.isDragging && this.selectedEntities.length > 0) {
             this.selectedEntities.forEach((s, idx) => {
                 const off = this.dragOffsets[idx];
-                if (s.type === 'camera') {
+                if (s.type === 'camera' || s.type === 'obstacle') {
                     s.entity.x = this.snap(worldPos.x - off.x);
                     s.entity.y = this.snap(worldPos.y - off.y);
                 } else if (s.type === 'label') {
                     s.entity.x = worldPos.x - off.x;
                     s.entity.y = worldPos.y - off.y;
                 } else if (s.type === 'wall') {
-                    s.entity.x1 = this.snap(worldPos.x - off.x1);
-                    s.entity.y1 = this.snap(worldPos.y - off.y1);
-                    s.entity.x2 = this.snap(worldPos.x - off.x2);
-                    s.entity.y2 = this.snap(worldPos.y - off.y2);
-                } else if (s.type === 'wall-endpoint') {
-                    if (off.which === 'p1') {
-                        s.entity.x1 = this.snap(worldPos.x);
-                        s.entity.y1 = this.snap(worldPos.y);
+                    let nx1 = worldPos.x - off.x1;
+                    let ny1 = worldPos.y - off.y1;
+                    let nx2 = worldPos.x - off.x2;
+                    let ny2 = worldPos.y - off.y2;
+                    
+                    const snap1 = this.getSnapPoint(nx1, ny1, s.entity);
+                    const snap2 = this.getSnapPoint(nx2, ny2, s.entity);
+                    
+                    if (snap1) {
+                        const dx = snap1.x - nx1;
+                        const dy = snap1.y - ny1;
+                        nx1 += dx; ny1 += dy;
+                        nx2 += dx; ny2 += dy;
+                    } else if (snap2) {
+                        const dx = snap2.x - nx2;
+                        const dy = snap2.y - ny2;
+                        nx1 += dx; ny1 += dy;
+                        nx2 += dx; ny2 += dy;
                     } else {
-                        s.entity.x2 = this.snap(worldPos.x);
-                        s.entity.y2 = this.snap(worldPos.y);
+                        nx1 = this.snap(nx1); ny1 = this.snap(ny1);
+                        nx2 = this.snap(nx2); ny2 = this.snap(ny2);
+                    }
+                    s.entity.x1 = nx1;
+                    s.entity.y1 = ny1;
+                    s.entity.x2 = nx2;
+                    s.entity.y2 = ny2;
+                } else if (s.type === 'drawing') {
+                    const dx = worldPos.x - off.x;
+                    const dy = worldPos.y - off.y;
+                    s.entity.move(dx, dy);
+                    off.x = worldPos.x;
+                    off.y = worldPos.y;
+                } else if (s.type === 'wall-endpoint') {
+                    let snapped = this.getSnapPoint(worldPos.x, worldPos.y, s.entity);
+                    
+                    // If not snapped to a corner, try snapping to 45 degree angles
+                    if (!snapped) {
+                        const pivot = off.which === 'p1' ? { x: s.entity.x2, y: s.entity.y2 } : { x: s.entity.x1, y: s.entity.y1 };
+                        snapped = this.getAngleSnap(worldPos.x, worldPos.y, pivot.x, pivot.y, 45, 3);
+                    }
+
+                    const nx = snapped ? snapped.x : this.snap(worldPos.x);
+                    const ny = snapped ? snapped.y : this.snap(worldPos.y);
+
+                    if (s.connectedEndpoints && s.connectedEndpoints.length > 0) {
+                        s.connectedEndpoints.forEach(conn => {
+                            if (conn.which === 'p1') {
+                                conn.wall.x1 = nx;
+                                conn.wall.y1 = ny;
+                            } else {
+                                conn.wall.x2 = nx;
+                                conn.wall.y2 = ny;
+                            }
+                        });
+                    } else {
+                        // Fallback for single movement if for some reason connections weren't found
+                        if (off.which === 'p1') {
+                            s.entity.x1 = nx;
+                            s.entity.y1 = ny;
+                        } else {
+                            s.entity.x2 = nx;
+                            s.entity.y2 = ny;
+                        }
                     }
                 }
             });
@@ -599,15 +785,16 @@ export class CanvasEngine {
             const sy = this.snap(worldPos.y);
             this.mouseWorldPos = { x: sx, y: sy };
             
-            // Apply ortho snap to preview if not close to another snap point
-            const dx = this.mouseWorldPos.x - this.wallStart.x;
-            const dy = this.mouseWorldPos.y - this.wallStart.y;
-            if (Math.abs(dx) < Math.abs(dy) * 0.1) this.mouseWorldPos.x = this.wallStart.x;
-            if (Math.abs(dy) < Math.abs(dx) * 0.1) this.mouseWorldPos.y = this.wallStart.y;
+            // Apply 45-degree angle snap to preview if not snapped to another point
+            const snappedAngle = this.getAngleSnap(this.mouseWorldPos.x, this.mouseWorldPos.y, this.wallStart.x, this.wallStart.y, 45, 10);
+            if (snappedAngle) {
+                this.mouseWorldPos.x = snappedAngle.x;
+                this.mouseWorldPos.y = snappedAngle.y;
+            }
             
             // Alignment guides
             this.alignmentGuides = [];
-            const threshold = 10; // Pixels distance to snap
+            const threshold = 5; // Pixels distance to snap
             
             this.project.walls.forEach(w => {
                 const points = [{x: w.x1, y: w.y1}, {x: w.x2, y: w.y2}];
@@ -629,6 +816,20 @@ export class CanvasEngine {
     }
 
     onPointerUp(e) {
+        if (this.isSnapshotMode) return;
+
+        if (this.isDrawingFreehand && this.currentDrawing) {
+            if (this.currentDrawing.points.length > 1) {
+                this.project.addDrawing(this.currentDrawing);
+                this.selectedEntities = [{ type: 'drawing', index: this.project.drawings.length - 1, entity: this.currentDrawing }];
+                window.app.ui.onEntitySelected(this.selectedEntities[0]);
+            }
+            this.isDrawingFreehand = false;
+            this.currentDrawing = null;
+            this.render();
+            return;
+        }
+
         if (this.isSelectionBox && this.selectionStart && this.selectionEnd) {
             const x1 = Math.min(this.selectionStart.x, this.selectionEnd.x);
             const y1 = Math.min(this.selectionStart.y, this.selectionEnd.y);
@@ -660,6 +861,10 @@ export class CanvasEngine {
             window.app.ui.onEntitySelected(this.selectedEntities.length === 1 ? this.selectedEntities[0] : (this.selectedEntities.length > 1 ? { type: 'multiple', count: this.selectedEntities.length } : null));
         }
 
+        if (this.isDragging && this.selectedEntities.length > 0) {
+            window.app.ui.onEntitySelected(this.selectedEntities.length === 1 ? this.selectedEntities[0] : { type: 'multiple', count: this.selectedEntities.length });
+        }
+
         this.pointers.delete(e.pointerId);
         if (this.pointers.size < 2) {
             this.lastMidX = null;
@@ -671,10 +876,6 @@ export class CanvasEngine {
         this.isSelectionBox = false;
         this.selectionStart = null;
         this.selectionEnd = null;
-        this.isMeasuring = false;
-        this.isDrawingWall = false;
-        this.isRotatingNewCamera = false;
-        this.rotatingCamera = null;
         this.render();
     }
 
@@ -868,8 +1069,14 @@ export class CanvasEngine {
         this.project.cameras.forEach(c => {
             const isSelected = this.selectedEntities.some(s => s.entity === c);
             const isHovered = this.hoveredEntity?.entity === c;
-            c.drawFOV(ctx, this.zoom, isSelected, this.project.walls);
+            c.drawFOV(ctx, this.zoom, isSelected, this.project.walls, this.project.obstacles, this.project.drawings);
             c.draw(ctx, this.zoom, isSelected, isHovered);
+        });
+
+        this.project.obstacles.forEach(o => {
+            const isSelected = this.selectedEntities.some(s => s.entity === o);
+            const isHovered = this.hoveredEntity?.entity === o;
+            o.draw(ctx, this.zoom, isSelected, isHovered);
         });
 
         this.project.labels.forEach(l => {
@@ -877,6 +1084,16 @@ export class CanvasEngine {
             const isHovered = this.hoveredEntity?.entity === l;
             l.draw(ctx, this.zoom, isSelected, isHovered);
         });
+
+        this.project.drawings.forEach(d => {
+            const isSelected = this.selectedEntities.some(s => s.entity === d);
+            const isHovered = this.hoveredEntity?.entity === d;
+            d.draw(ctx, this.zoom, isSelected, isHovered);
+        });
+
+        if (this.currentDrawing) {
+            this.currentDrawing.draw(ctx, this.zoom, false, false);
+        }
 
         // 4. Render selection box (Marquee)
         if (this.isSelectionBox && this.selectionStart && this.selectionEnd) {

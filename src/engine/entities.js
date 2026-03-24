@@ -108,6 +108,41 @@ export class Camera {
                     hitPoint = { x: intersect.x, y: intersect.y };
                 }
             });
+
+            // Ray-Obstacle Intersection (Circles)
+            const obs = arguments[4] || []; // Optional obstacles array
+            const drawings = arguments[5] || []; // Optional drawings array
+            obs.forEach(o => {
+                if (!o.isObstacle) return;
+                const intersect = this.getCircleIntersection(
+                    { x: this.x, y: this.y },
+                    { x: targetX, y: targetY },
+                    { x: o.x, y: o.y, r: (o.radius || 0.5) * SCALE }
+                );
+                if (intersect && intersect.dist < closestDist) {
+                    closestDist = intersect.dist;
+                    hitPoint = { x: intersect.x, y: intersect.y };
+                }
+            });
+
+            // Ray-Drawing Intersection (Segments)
+            drawings.forEach(d => {
+                if (d.isObstacle && d.points.length >= 2) {
+                    for (let j = 0; j < d.points.length - 1; j++) {
+                        const intersect = this.getIntersection(
+                            { x: this.x, y: this.y },
+                            { x: targetX, y: targetY },
+                            d.points[j],
+                            d.points[j+1]
+                        );
+                        if (intersect && intersect.dist < closestDist) {
+                            closestDist = intersect.dist;
+                            hitPoint = { x: intersect.x, y: intersect.y };
+                        }
+                    }
+                }
+            });
+
             points.push(hitPoint);
         }
 
@@ -158,6 +193,42 @@ export class Camera {
                 dist: ua
             };
         }
+        return null;
+    }
+
+    getCircleIntersection(p1, p2, circle) {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const fx = p1.x - circle.x;
+        const fy = p1.y - circle.y;
+
+        const a = dx * dx + dy * dy;
+        const b = 2 * (fx * dx + fy * dy);
+        const c = (fx * fx + fy * fy) - circle.r * circle.r;
+
+        let discriminant = b * b - 4 * a * c;
+        if (discriminant < 0) return null;
+
+        discriminant = Math.sqrt(discriminant);
+        const t1 = (-b - discriminant) / (2 * a);
+        const t2 = (-b + discriminant) / (2 * a);
+
+        if (t1 >= 0 && t1 <= 1) {
+            return {
+                x: p1.x + t1 * dx,
+                y: p1.y + t1 * dy,
+                dist: t1
+            };
+        }
+        // If the ray starts inside the circle, we might want the exit point t2
+        if (t2 >= 0 && t2 <= 1) {
+             return {
+                x: p1.x + t2 * dx,
+                y: p1.y + t2 * dy,
+                dist: t2
+            };
+        }
+
         return null;
     }
 }
@@ -342,6 +413,19 @@ export class Wall {
             ctx.restore();
         }
     }
+
+    updateLength(newLength) {
+        const dx = this.x2 - this.x1;
+        const dy = this.y2 - this.y1;
+        const currentLenPx = Math.sqrt(dx * dx + dy * dy);
+        if (currentLenPx === 0) return;
+
+        const newLenPx = newLength * 10; // 10px = 1m
+        const ratio = newLenPx / currentLenPx;
+
+        this.x2 = this.x1 + dx * ratio;
+        this.y2 = this.y1 + dy * ratio;
+    }
 }
 
 export class TextLabel {
@@ -380,5 +464,134 @@ export class TextLabel {
         }
 
         ctx.restore();
+    }
+}
+
+export class Obstacle {
+    constructor(config) {
+        this.id = config.id || Math.random().toString(36).substr(2, 9);
+        this.x = config.x;
+        this.y = config.y;
+        this.type = config.type || 'tree'; // tree, post, bush, box, text
+        this.radius = config.radius || 1; // in meters (radius or half-width)
+        this.isObstacle = config.isObstacle !== undefined ? config.isObstacle : true;
+        this.color = config.color || (this.type === 'tree' ? '34,197,94' : '148,163,184');
+        this.text = config.text || '';
+    }
+
+    draw(ctx, zoom, isSelected, isHovered) {
+        const r = (this.radius * SCALE);
+        const c = this.color;
+        
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        if (isSelected || isHovered) {
+            ctx.shadowColor = `rgba(${c}, 0.5)`;
+            ctx.shadowBlur = 15 / zoom;
+        }
+
+        if (this.type === 'tree' || this.type === 'bush' || this.type === 'post') {
+            // Circle based drawing
+            ctx.beginPath();
+            ctx.arc(0, 0, r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${c}, ${this.isObstacle ? 0.6 : 0.3})`;
+            ctx.fill();
+            ctx.strokeStyle = `rgb(${c})`;
+            ctx.lineWidth = 2 / zoom;
+            ctx.stroke();
+
+            // Decorative inner circles for trees/bushes
+            if (this.type === 'tree' || this.type === 'bush') {
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 0.4, 0, Math.PI * 2);
+                ctx.stroke();
+            } else if (this.type === 'post') {
+                // Post has a small dot in center
+                ctx.beginPath();
+                ctx.arc(0, 0, 2 / zoom, 0, Math.PI * 2);
+                ctx.fillStyle = '#000';
+                ctx.fill();
+            }
+        } else if (this.type === 'box') {
+            // Rectangle based
+            ctx.fillStyle = `rgba(${c}, ${this.isObstacle ? 0.6 : 0.3})`;
+            ctx.fillRect(-r, -r, r * 2, r * 2);
+            ctx.strokeStyle = `rgb(${c})`;
+            ctx.lineWidth = 2 / zoom;
+            ctx.strokeRect(-r, -r, r * 2, r * 2);
+        }
+
+        // Label/Text
+        if (this.text) {
+            ctx.font = `500 ${10 / zoom}px "Inter", sans-serif`;
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.fillText(this.text, 0, r + 12 / zoom);
+        }
+
+        if (isSelected) {
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1 / zoom;
+            ctx.setLineDash([5 / zoom, 5 / zoom]);
+            const dashR = r + 5 / zoom;
+            if (this.type === 'box') {
+                ctx.strokeRect(-dashR, -dashR, dashR * 2, dashR * 2);
+            } else {
+                ctx.beginPath();
+                ctx.arc(0, 0, dashR, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
+    }
+}
+
+export class FreeDraw {
+    constructor(config) {
+        this.id = config.id || Math.random().toString(36).substr(2, 9);
+        this.points = config.points || []; // Array of {x, y}
+        this.color = config.color || '255,255,255';
+        this.lineWidth = config.lineWidth || 2;
+        this.isObstacle = config.isObstacle || false;
+    }
+
+    draw(ctx, zoom, isSelected, isHovered) {
+        if (this.points.length < 2) return;
+
+        ctx.save();
+        
+        ctx.strokeStyle = `rgb(${this.color})`;
+        ctx.lineWidth = this.lineWidth / zoom;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].x, this.points[0].y);
+        for (let i = 1; i < this.points.length; i++) {
+            ctx.lineTo(this.points[i].x, this.points[i].y);
+        }
+        ctx.stroke();
+
+        if (isSelected || isHovered) {
+            ctx.strokeStyle = isSelected ? '#3b82f6' : '#60a5fa';
+            ctx.lineWidth = (this.lineWidth + 4) / zoom;
+            ctx.globalAlpha = 0.3;
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+        }
+
+        ctx.restore();
+    }
+
+    move(dx, dy) {
+        this.points = this.points.map(p => ({
+            x: p.x + dx,
+            y: p.y + dy
+        }));
     }
 }

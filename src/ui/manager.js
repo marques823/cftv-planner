@@ -9,6 +9,7 @@ export class UIManager {
         this.currentTool = 'select';
         this.selectedModel = CATALOG[0];
         this.brandFilter = 'all';
+        this.inspectorAutoOpen = false;
     }
 
     async init() {
@@ -17,6 +18,7 @@ export class UIManager {
         this.setupSettingsActions();
         this.setupMetadataActions();
         this.setupThemeToggle();
+        this.setupInspectorToggle();
         this.renderCatalog();
         this.setupCatalogFilters();
         
@@ -60,6 +62,9 @@ export class UIManager {
         this.engine.isDrawingWall = false;
         this.engine.wallStart = null;
         this.engine.alignmentGuides = [];
+        this.engine.isMeasuring = false;
+        this.engine.isRotatingNewCamera = false;
+        this.engine.rotatingCamera = null;
         
         // Close sidebar on mobile when a tool is picked
         document.querySelector('.sidebar')?.classList.remove('open');
@@ -107,11 +112,23 @@ export class UIManager {
         });
     }
 
+    toggleInspector(visible) {
+        const inspector = document.querySelector('.inspector');
+        if (!inspector) return;
+        if (visible) {
+            inspector.classList.add('active');
+        } else {
+            inspector.classList.remove('active');
+        }
+    }
+
     onEntitySelected(hit) {
         const pnl = document.getElementById('inspector-content');
         const inspector = document.querySelector('.inspector');
+        const badge = document.getElementById('selection-badge');
         
         if (!hit) {
+            badge?.classList.add('hidden');
             inspector.classList.remove('active');
             pnl.innerHTML = `
                 <div class="empty-state">
@@ -123,7 +140,11 @@ export class UIManager {
             return;
         }
 
-        inspector.classList.add('active');
+        badge?.classList.remove('hidden');
+
+        if (this.inspectorAutoOpen) {
+            inspector.classList.add('active');
+        }
 
         if (hit.type === 'multiple') {
             pnl.innerHTML = `
@@ -150,6 +171,8 @@ export class UIManager {
                         if (s.type === 'camera') window.app.project.cameras = window.app.project.cameras.filter(c => c !== s.entity);
                         else if (s.type === 'wall') window.app.project.walls = window.app.project.walls.filter(w => w !== s.entity);
                         else if (s.type === 'label') window.app.project.labels = window.app.project.labels.filter(l => l !== s.entity);
+                        else if (s.type === 'obstacle') window.app.project.obstacles = window.app.project.obstacles.filter(o => o !== s.entity);
+                        else if (s.type === 'drawing') window.app.project.drawings = window.app.project.drawings.filter(d => d !== s.entity);
                     });
                     engine.selectedEntities = [];
                     window.app.project.notifyChange();
@@ -201,9 +224,13 @@ export class UIManager {
             `;
         } else if (hit.type === 'wall' || hit.type === 'wall-endpoint') {
             const w = hit.type === 'wall-endpoint' ? hit.entity : entity;
+            const currentLen = Math.sqrt((w.x2 - w.x1) ** 2 + (w.y2 - w.y1) ** 2) / 10;
             pnl.innerHTML = `
                 <h3 class="panel-title">Editar Parede</h3>
-                <p class="panel-desc">Medida: ${Math.sqrt((w.x2 - w.x1) ** 2 + (w.y2 - w.y1) ** 2).toFixed(2)}m</p>
+                <div class="prop-group">
+                    <label>Comprimento (m)</label>
+                    <input type="number" step="0.01" value="${currentLen.toFixed(2)}" data-prop="wallLength">
+                </div>
                 <div class="prop-group" style="flex-direction: row; justify-content: space-between; align-items: center">
                     <label style="margin:0">Exibir Medida</label>
                     <input type="checkbox" ${w.showMeasurements ? 'checked' : ''} onchange="window.app.ui.updateEntity('showMeasurements', this.checked)">
@@ -270,6 +297,67 @@ export class UIManager {
                     <i data-lucide="trash-2"></i> Excluir Texto
                 </button>
             `;
+        } else if (hit.type === 'obstacle' || hit.type === 'drawing') {
+            const isDrawing = hit.type === 'drawing';
+            const isObstacle = hit.type === 'obstacle';
+            const title = isDrawing ? 'Editar Desenho' : (isObstacle ? 'Editar Objeto Livre' : 'Editar Texto');
+            
+            pnl.innerHTML = `
+                <h3 class="panel-title">${title}</h3>
+                ${isObstacle ? `
+                <div class="prop-group">
+                    <label>Tipo de Objeto</label>
+                    <select data-prop="type" class="form-select">
+                        <option value="tree" ${entity.type === 'tree' ? 'selected' : ''}>Árvore</option>
+                        <option value="bush" ${entity.type === 'bush' ? 'selected' : ''}>Arbusto</option>
+                        <option value="post" ${entity.type === 'post' ? 'selected' : ''}>Poste</option>
+                        <option value="box" ${entity.type === 'box' ? 'selected' : ''}>Caixa/Obstáculo</option>
+                    </select>
+                </div>
+                <div class="prop-group">
+                    <label>Tamanho / Raio: <span class="val">${entity.radius}m</span></label>
+                    <input type="range" min="0.1" max="10" step="0.1" value="${entity.radius}" data-prop="radius">
+                </div>
+                ` : ''}
+                
+                ${isDrawing ? `
+                <div class="prop-group">
+                    <label>Espessura do Traço: <span class="val">${entity.lineWidth}px</span></label>
+                    <input type="range" min="1" max="20" step="1" value="${entity.lineWidth}" data-prop="lineWidth">
+                </div>
+                <div class="prop-group" style="flex-direction: row; justify-content: space-between; align-items: center">
+                    <label style="margin:0">Bloquear Visão (Obstáculo)</label>
+                    <input type="checkbox" ${entity.isObstacle ? 'checked' : ''} data-prop="isObstacle" data-type="bool">
+                </div>
+                ` : `
+                <div class="prop-group">
+                    <label>${isObstacle ? 'Texto Opcional' : 'Conteúdo do Texto'}</label>
+                    <input type="text" value="${entity.text}" data-prop="text" placeholder="${isObstacle ? 'Ex: Poste 01' : 'Digite aqui...'}">
+                </div>
+                `}
+
+                ${isObstacle ? `
+                <div class="prop-group" style="flex-direction: row; justify-content: space-between; align-items: center">
+                    <label style="margin:0">Bloquear Visão (Obstáculo)</label>
+                    <input type="checkbox" ${entity.isObstacle ? 'checked' : ''} data-prop="isObstacle" data-type="bool">
+                </div>
+                ` : ''}
+
+                <div class="property-group">
+                    <label>Cor do Elemento</label>
+                    <div class="color-presets">
+                        <div class="color-opt" style="background:#ffffff" onclick="window.app.ui.updateEntity('color', '255,255,255')"></div>
+                        <div class="color-opt" style="background:#22c55e" onclick="window.app.ui.updateEntity('color', '34,197,94')"></div>
+                        <div class="color-opt" style="background:#3b82f6" onclick="window.app.ui.updateEntity('color', '59,130,246')"></div>
+                        <div class="color-opt" style="background:#f59e0b" onclick="window.app.ui.updateEntity('color', '245,158,11')"></div>
+                        <div class="color-opt" style="background:#ef4444" onclick="window.app.ui.updateEntity('color', '239,68,68')"></div>
+                        <div class="color-opt" style="background:#000000" onclick="window.app.ui.updateEntity('color', '0,0,0')"></div>
+                    </div>
+                </div>
+                <button class="btn-danger-outline" id="btn-delete-entity">
+                    <i data-lucide="trash-2"></i> Excluir ${isDrawing ? 'Desenho' : (isObstacle ? 'Objeto' : 'Texto')}
+                </button>
+            `;
         }
 
         // Listeners for inputs
@@ -280,7 +368,12 @@ export class UIManager {
                 const isBool = e.target.getAttribute('data-type') === 'bool';
                 const val = isBool ? e.target.checked : e.target.value;
                 
-                if (prop === 'widthCm') {
+                if (prop === 'wallLength') {
+                    const length = parseFloat(val);
+                    if (!isNaN(length) && length > 0) {
+                        entity.updateLength(length);
+                    }
+                } else if (prop === 'widthCm') {
                     entity.width = parseInt(val) / 100;
                     if (e.target.previousElementSibling?.querySelector('.val')) {
                         e.target.previousElementSibling.querySelector('.val').textContent = `${val}cm`;
@@ -288,9 +381,9 @@ export class UIManager {
                 } else if (isBool) {
                     entity[prop] = val;
                 } else {
-                    entity[prop] = (prop === 'name' || prop === 'text') ? val : parseInt(val);
+                    entity[prop] = (prop === 'name' || prop === 'text' || prop === 'type') ? val : (prop.includes('rotation') || prop.includes('fov') || prop.includes('range') || prop.includes('fontSize') || prop.includes('lineWidth') ? parseInt(val) : (prop === 'radius' ? parseFloat(val) : val));
                     if (e.target.previousElementSibling?.querySelector('.val')) {
-                        e.target.previousElementSibling.querySelector('.val').textContent = `${val}${prop === 'fontSize' ? 'px' : (prop === 'range' ? 'm' : (prop === 'rotation' || prop === 'fov' ? '°' : ''))}`;
+                        e.target.previousElementSibling.querySelector('.val').textContent = `${val}${prop === 'fontSize' || prop === 'lineWidth' ? 'px' : (prop === 'range' || prop === 'radius' ? 'm' : (prop === 'rotation' || prop === 'fov' ? '°' : ''))}`;
                     }
                 }
                 this.engine.render();
@@ -310,6 +403,8 @@ export class UIManager {
                     this.projects.notifyChange();
                 }
                 else if (hit.type === 'label') this.projects.removeLabel(hit.index);
+                else if (hit.type === 'obstacle') this.projects.removeObstacle(hit.index);
+                else if (hit.type === 'drawing') this.projects.removeDrawing(hit.index);
                 this.onEntitySelected(null);
                 this.engine.render();
                 this.renderPlacedList();
@@ -360,7 +455,21 @@ export class UIManager {
     showBOM() {
         const bom = this.projects.getBOM();
         const pnl = document.getElementById('inspector-content');
+        const inspector = document.querySelector('.inspector');
         
+        if (inspector) inspector.classList.add('active');
+        
+        if (bom.length === 0) {
+            pnl.innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="camera-off"></i>
+                    <p>Nenhuma câmera posicionada para gerar a lista de materiais.</p>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
         pnl.innerHTML = `
             <div class="bom-container">
                 <h3 class="section-title">Lista de Materiais</h3>
@@ -398,6 +507,8 @@ export class UIManager {
         const walls = this.projects.walls;
         const cameras = this.projects.cameras;
         const labels = this.projects.labels;
+        const obstacles = this.projects.obstacles || [];
+        const drawings = this.projects.drawings || [];
 
         // 1. Calculate Bounding Box of all elements
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -405,7 +516,7 @@ export class UIManager {
         const paddingMeters = 2;
         const SCALE_EXPORT = 40; // 40px = 1m (HD)
         
-        if (walls.length === 0 && cameras.length === 0 && labels.length === 0) {
+        if (walls.length === 0 && cameras.length === 0 && labels.length === 0 && obstacles.length === 0 && drawings.length === 0) {
             // Empty project fallback to workspace settings
             minX = 0; minY = 0;
             maxX = this.projects.settings.widthMeters * 10;
@@ -422,6 +533,17 @@ export class UIManager {
             labels.forEach(l => {
                 minX = Math.min(minX, l.x); minY = Math.min(minY, l.y);
                 maxX = Math.max(maxX, l.x); maxY = Math.max(maxY, l.y);
+            });
+            obstacles.forEach(o => {
+                const r = (o.radius || 0.5) * 10;
+                minX = Math.min(minX, o.x - r); minY = Math.min(minY, o.y - r);
+                maxX = Math.max(maxX, o.x + r); maxY = Math.max(maxY, o.y + r);
+            });
+            drawings.forEach(d => {
+                d.points.forEach(p => {
+                    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+                    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+                });
             });
             
             // Add margin in world units (1 unit = 0.1m, so 2m = 20 units)
@@ -465,8 +587,14 @@ export class UIManager {
         // Draw Walls
         walls.forEach(w => w.draw(ctx, SCALE_EXPORT / 10));
         
+        // Draw Obstacles
+        obstacles.forEach(o => o.draw(ctx, SCALE_EXPORT / 10, false, false));
+        
+        // Draw Drawings
+        drawings.forEach(d => d.draw(ctx, SCALE_EXPORT / 10, false, false));
+        
         // Draw FOVs
-        cameras.forEach(c => c.drawFOV(ctx, SCALE_EXPORT / 10, false, walls));
+        cameras.forEach(c => c.drawFOV(ctx, SCALE_EXPORT / 10, false, walls, obstacles, drawings));
         
         // Draw Cameras
         cameras.forEach(c => c.draw(ctx, SCALE_EXPORT / 10, false, false));
@@ -479,6 +607,10 @@ export class UIManager {
 
         // 4. Generate Report Window
         const printWin = window.open('', '_blank');
+        if (!printWin) {
+            alert('Por favor, permita pop-ups para gerar o relatório.');
+            return;
+        }
         printWin.document.write(`
             <html>
                 <head>
@@ -569,9 +701,26 @@ export class UIManager {
         }, 800);
     }
 
+    setupInspectorToggle() {
+        const btn = document.getElementById('btn-inspector-toggle');
+        const inspector = document.querySelector('.inspector');
+        btn?.addEventListener('click', () => {
+            const isActive = inspector.classList.toggle('active');
+            if (isActive) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
     onProjectUpdate(stats) {
-        document.getElementById('hdr-cams').textContent = stats.cameraCount;
-        document.getElementById('hdr-walls').textContent = stats.wallCount;
+        document.getElementById('hdr-cams').textContent = stats.cameraCount || 0;
+        document.getElementById('hdr-walls').textContent = stats.wallCount || 0;
+        const obstaclesCount = this.projects.obstacles ? this.projects.obstacles.length : 0;
+        if (document.getElementById('hdr-obstacles')) {
+            document.getElementById('hdr-obstacles').textContent = obstaclesCount;
+        }
         this.renderPlacedList();
     }
 
@@ -911,11 +1060,13 @@ export class UIManager {
         switch(e.key.toLowerCase()) {
             case 's': this.setTool('select'); break;
             case 'w': this.setTool('wall'); break;
-            case 'd': this.setTool('door'); break;
+            case 'p': this.setTool('door'); break;
             case 'j': this.setTool('window'); break;
             case 'c': this.setTool('camera'); break;
             case 'r': this.setTool('ruler'); break;
             case 't': this.setTool('text'); break;
+            case 'o': this.setTool('obstacle'); break;
+            case 'd': this.setTool('draw'); break;
             case 'e': this.setTool('erase'); break;
             case 'm': this.setTool('move'); break;
             case 'escape': 

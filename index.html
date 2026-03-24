@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>CFTV Planner Pro — Projetos Inteligentes</title>
-    <link rel="stylesheet" href="/src/styles/main.css">
+    <link rel="stylesheet" href="/src/styles/main.css?v=7">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -32,6 +32,10 @@
                         <i data-lucide="camera"></i>
                         <span id="hdr-cams">0</span>
                     </div>
+                    <div class="stat-item" title="Obstáculos/Objetos">
+                        <i data-lucide="box"></i>
+                        <span id="hdr-obstacles">0</span>
+                    </div>
                     <div class="stat-item" title="Metros de parede">
                         <i data-lucide="buffer"></i>
                         <span id="hdr-walls">0</span>
@@ -46,6 +50,10 @@
             <div class="header-right">
                 <button class="btn-ghost" id="btn-theme-toggle" title="Alternar tema">
                     <i data-lucide="moon"></i>
+                </button>
+                <button class="btn-ghost" id="btn-inspector-toggle" title="Ver Propriedades">
+                    <i data-lucide="settings-2"></i>
+                    <span class="badge hidden" id="selection-badge">!</span>
                 </button>
                 <div class="divider"></div>
                 <div id="auth-section">
@@ -67,41 +75,52 @@
             <!-- Sidebar overlay (mobile drawer backdrop) -->
             <div id="sidebar-overlay"></div>
 
+            <!-- Floating Sidebar Toolbar -->
+            <aside class="floating-tools" id="floating-tools">
+                <div class="drag-handle" id="tools-drag-handle" title="Mover caixa de ferramentas">
+                    <i data-lucide="grip-horizontal"></i>
+                </div>
+                <div class="tool-grid vertical">
+                    <button class="tool-btn active" id="tool-select" data-tool="select" title="Cursor (S)">
+                        <i data-lucide="mouse-pointer-2"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-move" data-tool="move" title="Mover (M)">
+                        <i data-lucide="move"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-wall" data-tool="wall" title="Parede (W)">
+                        <i data-lucide="pen-tool"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-door" data-tool="door" title="Porta (P)">
+                        <i data-lucide="door-open"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-window" data-tool="window" title="Janela (J)">
+                        <i data-lucide="layout-panel-left"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-camera" data-tool="camera" title="Câmera (C)">
+                        <i data-lucide="camera"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-ruler" data-tool="ruler" title="Régua (R)">
+                        <i data-lucide="ruler"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-text" data-tool="text" title="Texto (T)">
+                        <i data-lucide="type"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-obstacle" data-tool="obstacle" title="Objeto/Obstáculo (O)">
+                        <i data-lucide="box"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-draw" data-tool="draw" title="Desenho Livre (D)">
+                        <i data-lucide="pencil"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-erase" data-tool="erase" title="Apagar (E)">
+                        <i data-lucide="trash-2"></i>
+                    </button>
+                </div>
+            </aside>
+
             <!-- Sidebar Toolbar -->
             <aside class="sidebar" id="sidebar">
                 <nav class="toolbar">
-                    <div class="tool-section">
-                        <h3 class="section-title">Ferramentas</h3>
-                        <div class="tool-grid">
-                            <button class="tool-btn active" id="tool-select" data-tool="select" title="Cursor (S)">
-                                <i data-lucide="mouse-pointer-2"></i>
-                            </button>
-                            <button class="tool-btn" id="tool-move" data-tool="move" title="Mover (M)">
-                                <i data-lucide="move"></i>
-                            </button>
-                            <button class="tool-btn" id="tool-wall" data-tool="wall" title="Parede (W)">
-                                <i data-lucide="pen-tool"></i>
-                            </button>
-                            <button class="tool-btn" id="tool-door" data-tool="door" title="Porta (D)">
-                                <i data-lucide="door-open"></i>
-                            </button>
-                            <button class="tool-btn" id="tool-window" data-tool="window" title="Janela (J)">
-                                <i data-lucide="layout-panel-left"></i>
-                            </button>
-                            <button class="tool-btn" id="tool-camera" data-tool="camera" title="Câmera (C)">
-                                <i data-lucide="camera"></i>
-                            </button>
-                            <button class="tool-btn" id="tool-ruler" data-tool="ruler" title="Régua (R)">
-                                <i data-lucide="ruler"></i>
-                            </button>
-                            <button class="tool-btn" id="tool-text" data-tool="text" title="Texto (T)">
-                                <i data-lucide="type"></i>
-                            </button>
-                            <button class="tool-btn" id="tool-erase" data-tool="erase" title="Apagar (E)">
-                                <i data-lucide="trash-2"></i>
-                            </button>
-                        </div>
-                    </div>
+
 
                     <div class="tool-section">
                         <h3 class="section-title">Dados do Projeto</h3>
@@ -251,6 +270,70 @@
       });
 
       overlay.addEventListener('click', closeSidebar);
+
+      // Floating Tools Draggable Logic
+      const floatingTools = document.getElementById('floating-tools');
+      const dragHandle = document.getElementById('tools-drag-handle');
+      let isDragging = false;
+      let startX, startY, initialX, initialY;
+
+      dragHandle.addEventListener('mousedown', dragStart);
+      dragHandle.addEventListener('touchstart', dragStart, {passive: false});
+
+      function dragStart(e) {
+        isDragging = true;
+        const target = e.type === 'touchstart' ? e.touches[0] : e;
+        startX = target.clientX;
+        startY = target.clientY;
+        
+        const rect = floatingTools.getBoundingClientRect();
+        const parent = floatingTools.offsetParent || document.body;
+        const parentRect = parent.getBoundingClientRect();
+        
+        // Calculate exact relative pixel position including the current CSS transform
+        initialX = rect.left - parentRect.left;
+        initialY = rect.top - parentRect.top;
+
+        // Clear the CSS transforms so it's strictly positioned by top/left
+        floatingTools.style.transform = 'none';
+        floatingTools.style.left = initialX + 'px';
+        floatingTools.style.top = initialY + 'px';
+        floatingTools.style.bottom = 'auto';
+        floatingTools.style.right = 'auto';
+
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('touchmove', drag, {passive: false});
+        document.addEventListener('mouseup', dragEnd);
+        document.addEventListener('touchend', dragEnd);
+      }
+
+      function drag(e) {
+        if (!isDragging) return;
+        e.preventDefault(); 
+        const target = e.type === 'touchmove' ? e.touches[0] : e;
+        
+        const dx = target.clientX - startX;
+        const dy = target.clientY - startY;
+
+        let newX = initialX + dx;
+        let newY = initialY + dy;
+
+        // Constrain to app-content bounds
+        const parent = floatingTools.offsetParent;
+        newX = Math.max(0, Math.min(parent.offsetWidth - floatingTools.offsetWidth, newX));
+        newY = Math.max(0, Math.min(parent.offsetHeight - floatingTools.offsetHeight, newY));
+
+        floatingTools.style.left = newX + 'px';
+        floatingTools.style.top = newY + 'px';
+      }
+
+      function dragEnd() {
+        isDragging = false;
+        document.removeEventListener('mousemove', drag);
+        document.removeEventListener('touchmove', drag);
+        document.removeEventListener('mouseup', dragEnd);
+        document.removeEventListener('touchend', dragEnd);
+      }
     </script>
 </body>
 </html>
