@@ -358,98 +358,170 @@ export class UIManager {
     printProject() {
         const bom = this.projects.getBOM();
         const meta = this.projects.metadata;
-        const settings = this.projects.settings;
-        const SCALE = 10;
+        const walls = this.projects.walls;
+        const cameras = this.projects.cameras;
+        const labels = this.projects.labels;
+
+        // 1. Calculate Bounding Box of all elements
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         
-        // Capture a clean snapshot of the workspace
+        const paddingMeters = 2;
+        const SCALE_EXPORT = 40; // 40px = 1m (HD)
+        
+        if (walls.length === 0 && cameras.length === 0 && labels.length === 0) {
+            // Empty project fallback to workspace settings
+            minX = 0; minY = 0;
+            maxX = this.projects.settings.widthMeters * 10;
+            maxY = this.projects.settings.heightMeters * 10;
+        } else {
+            walls.forEach(w => {
+                minX = Math.min(minX, w.x1, w.x2); minY = Math.min(minY, w.y1, w.y2);
+                maxX = Math.max(maxX, w.x1, w.x2); maxY = Math.max(maxY, w.y1, w.y2);
+            });
+            cameras.forEach(c => {
+                minX = Math.min(minX, c.x); minY = Math.min(minY, c.y);
+                maxX = Math.max(maxX, c.x); maxY = Math.max(maxY, c.y);
+            });
+            labels.forEach(l => {
+                minX = Math.min(minX, l.x); minY = Math.min(minY, l.y);
+                maxX = Math.max(maxX, l.x); maxY = Math.max(maxY, l.y);
+            });
+            
+            // Add margin in world units (1 unit = 0.1m, so 2m = 20 units)
+            minX -= paddingMeters * 10; minY -= paddingMeters * 10;
+            maxX += paddingMeters * 10; maxY += paddingMeters * 10;
+        }
+
+        const exportW = maxX - minX;
+        const exportH = maxY - minY;
+
+        // 2. Create HD Canvas
         const exportCanvas = document.createElement('canvas');
-        exportCanvas.width = settings.widthMeters * SCALE;
-        exportCanvas.height = settings.heightMeters * SCALE;
+        // Convert world units to export pixels (world/10 * SCALE_EXPORT)
+        const canvasW = (exportW / 10) * SCALE_EXPORT;
+        const canvasH = (exportH / 10) * SCALE_EXPORT;
+        
+        exportCanvas.width = canvasW;
+        exportCanvas.height = canvasH;
         const ctx = exportCanvas.getContext('2d');
         
-        // Draw grid
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = 1;
-        for (let x = 0; x <= exportCanvas.width; x += SCALE) {
-            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, exportCanvas.height); ctx.stroke();
+        // Background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+        
+        // Apply Transform: Move to local origin and scale to HD
+        ctx.save();
+        ctx.scale(SCALE_EXPORT / 10, SCALE_EXPORT / 10);
+        ctx.translate(-minX, -minY);
+
+        // 3. Draw Elements (Simplified but sharp)
+        // Draw grid first (1m steps)
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.lineWidth = 0.5;
+        for (let x = Math.floor(minX / 10) * 10; x <= maxX; x += 10) {
+            ctx.beginPath(); ctx.moveTo(x, minY); ctx.lineTo(x, maxY); ctx.stroke();
         }
-        for (let y = 0; y <= exportCanvas.height; y += SCALE) {
-            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(exportCanvas.width, y); ctx.stroke();
+        for (let y = Math.floor(minY / 10) * 10; y <= maxY; y += 10) {
+            ctx.beginPath(); ctx.moveTo(minX, y); ctx.lineTo(maxX, y); ctx.stroke();
         }
 
-        // Draw entities (simplified render loop for export)
-        this.projects.walls.forEach(w => w.draw(ctx, 1));
-        this.projects.cameras.forEach(c => {
-            c.drawFOV(ctx, 1, false, this.projects.walls);
-            c.draw(ctx, 1, false, false);
-        });
-        this.projects.labels.forEach(l => l.draw(ctx, 1, false, false));
+        // Draw Walls
+        walls.forEach(w => w.draw(ctx, SCALE_EXPORT / 10));
+        
+        // Draw FOVs
+        cameras.forEach(c => c.drawFOV(ctx, SCALE_EXPORT / 10, false, walls));
+        
+        // Draw Cameras
+        cameras.forEach(c => c.draw(ctx, SCALE_EXPORT / 10, false, false));
+        
+        // Draw Labels
+        labels.forEach(l => l.draw(ctx, SCALE_EXPORT / 10, false, false));
 
+        ctx.restore();
         const imgData = exportCanvas.toDataURL('image/png');
 
+        // 4. Generate Report Window
         const printWin = window.open('', '_blank');
         printWin.document.write(`
             <html>
                 <head>
-                    <title>Projeto CFTV - ${meta.name}</title>
+                    <title>Relatório CFTV - ${meta.name}</title>
                     <style>
                         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #334155; line-height: 1.5; }
-                        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; margin-bottom: 30px; }
-                        h1 { margin: 0; color: #0f172a; font-size: 24px; }
-                        .meta-info p { margin: 4px 0; font-size: 14px; }
-                        .company-info { text-align: right; font-size: 14px; }
-                        .canvas-preview { width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; margin: 30px 0; max-height: 500px; object-fit: contain; background: #fff; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        th { background: #f1f5f9; text-align: left; padding: 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; }
-                        td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-                        .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
-                        @media print { .no-print { display: none; } }
+                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; line-height: 1.6; background: #fff; }
+                        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #3b82f6; padding-bottom: 25px; margin-bottom: 40px; }
+                        h1 { margin: 0; color: #0f172a; font-size: 28px; letter-spacing: -0.02em; }
+                        .meta-info p { margin: 6px 0; font-size: 14px; color: #475569; }
+                        .company-info { text-align: right; }
+                        .company-name { font-weight: 800; color: #3b82f6; font-size: 20px; text-transform: uppercase; }
+                        .canvas-container { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 30px 0; text-align: center; }
+                        .canvas-preview { max-width: 100%; height: auto; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); border-radius: 4px; background: #fff; }
+                        h2 { font-size: 20px; color: #0f172a; margin-top: 50px; border-left: 4px solid #3b82f6; padding-left: 15px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+                        th { background: #f8fafc; text-align: left; padding: 14px; font-size: 12px; text-transform: uppercase; color: #64748b; font-weight: 700; border-bottom: 2px solid #e2e8f0; }
+                        td { padding: 14px; border-bottom: 1px solid #f1f5f9; font-size: 14px; vertical-align: middle; }
+                        .cam-legend { display: flex; align-items: center; gap: 10px; }
+                        .cam-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.2); }
+                        .footer { margin-top: 80px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 30px; }
+                        @media print { body { padding: 0; } .no-print { display: none; } }
                     </style>
                 </head>
                 <body>
                     <div class="header">
                         <div class="meta-info">
-                            <h1>${meta.name}</h1>
-                            <p><strong>Cliente:</strong> ${meta.client || 'Padrão'}</p>
-                            <p><strong>Endereço:</strong> ${meta.address || 'Não informado'}</p>
-                            <p><strong>Data:</strong> ${new Date(meta.date).toLocaleDateString('pt-BR')}</p>
+                            <h1>${meta.name || 'Projeto sem título'}</h1>
+                            <p><strong>Cliente:</strong> ${meta.client || 'Geral'}</p>
+                            <p><strong>Local:</strong> ${meta.address || 'Não informado'}</p>
+                            <p><strong>Data de Emissão:</strong> ${new Date().toLocaleDateString('pt-BR')}</p>
                         </div>
                         <div class="company-info">
-                            <div style="font-weight: 700; color: #3b82f6; font-size: 18px;">${meta.company || 'CFTV PLANNER PRO'}</div>
-                            <div>Projetos e Segurança Eletrônica</div>
-                            <div style="color: #64748b; margin-top: 4px;">${meta.contact || 'cftv-planner-pro.github.io'}</div>
+                            <div class="company-name">${meta.company || 'CFTV PLANNER PRO'}</div>
+                            <div style="font-size: 14px; color: #64748b;">Segurança Eletrônica & Monitoramento</div>
+                            <div style="font-size: 13px; color: #3b82f6; margin-top: 4px; font-weight: 600;">${meta.contact || ''}</div>
                         </div>
                     </div>
 
-                    <h2 style="font-size: 18px; margin-bottom: 10px;">Planta do Projeto</h2>
-                    <img src="${imgData}" class="canvas-preview">
+                    <h2>Planta Técnica</h2>
+                    <div class="canvas-container">
+                        <img src="${imgData}" class="canvas-preview">
+                        <p style="font-size: 11px; color: #94a3b8; margin-top: 10px;">Escala visual baseada no enquadramento dos elementos.</p>
+                    </div>
 
-                    <h2 style="font-size: 18px; margin-top: 40px; margin-bottom: 15px;">Lista de Materiais (BOM)</h2>
+                    <h2>Lista de Materiais e Dispositivos</h2>
                     <table>
                         <thead>
                             <tr>
-                                <th style="width: 80px;">Qtd</th>
+                                <th style="width: 60px;">Qtd</th>
+                                <th>Item / Modelo</th>
                                 <th>Marca</th>
-                                <th>Modelo / Especificação</th>
+                                <th>Legenda</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${bom.map(item => `
-                                <tr>
-                                    <td><strong>${item.quantity}x</strong></td>
-                                    <td>${item.brand}</td>
-                                    <td>${item.model}</td>
-                                </tr>
-                            `).join('')}
+                            ${bom.map(item => {
+                                // Find a camera of this model to get its color
+                                const sample = cameras.find(c => c.brand === item.brand && c.modelName === item.model);
+                                const color = sample ? sample.color : '100,100,100';
+                                return `
+                                    <tr>
+                                        <td><strong>${item.quantity}x</strong></td>
+                                        <td><strong>${item.model}</strong></td>
+                                        <td>${item.brand}</td>
+                                        <td>
+                                            <div class="cam-legend">
+                                                <div class="cam-dot" style="background: rgb(${color})"></div>
+                                                <span style="font-size: 12px; color: #64748b">Identificação no mapa</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
                         </tbody>
                     </table>
 
                     <div class="footer">
-                        Este relatório foi gerado automaticamente pelo CFTV Planner Pro.<br>
-                        © ${new Date().getFullYear()} - Todos os direitos reservados.
+                        Este documento técnico foi gerado pelo CFTV Planner Pro.<br>
+                        As posições e ângulos são representações aproximadas para fins de planejamento.
                     </div>
                 </body>
             </html>
@@ -457,8 +529,7 @@ export class UIManager {
         printWin.document.close();
         setTimeout(() => {
             printWin.print();
-            // printWin.close(); // Optional: close after print
-        }, 1000);
+        }, 800);
     }
 
     onProjectUpdate(stats) {
@@ -468,6 +539,13 @@ export class UIManager {
     }
 
     setupHeaderActions() {
+        document.getElementById('btn-new-project')?.addEventListener('click', () => {
+            if (this.projects.cameras.length > 0 || this.projects.walls.length > 0) {
+                if (!confirm('Iniciar novo projeto? As alterações não salvas serão perdidas.')) return;
+            }
+            this.showNewProjectWizard();
+        });
+
         document.getElementById('btn-save')?.addEventListener('click', () => {
             const user = this.auth.getCurrentUser();
             this.projects.save(user?.id);
@@ -526,10 +604,12 @@ export class UIManager {
             const name = user.user_metadata?.full_name || user.email;
             section.innerHTML = `
                 <div class="user-profile">
-                    <button class="btn-ghost" id="btn-gallery" title="Meus Projetos">
-                        <i data-lucide="folder-open"></i> <span class="hide-mobile">Meus Projetos</span>
+                    <button class="btn-ghost" id="btn-new-project" title="Novo Projeto">
+                        <i data-lucide="file-plus"></i> <span class="hide-mobile">Novo</span>
                     </button>
-                    <span class="user-name hide-mobile">${name}</span>
+                    <button class="btn-ghost" id="btn-gallery" title="Meus Projetos">
+                        <i data-lucide="folder-open"></i> <span class="hide-mobile">Projetos</span>
+                    </button>
                     <button class="btn-ghost" id="btn-logout" title="Sair">
                         <i data-lucide="log-out"></i>
                     </button>
@@ -537,6 +617,7 @@ export class UIManager {
             `;
             document.getElementById('btn-logout').onclick = () => this.auth.signOut();
             document.getElementById('btn-gallery').onclick = () => this.showProjectGallery();
+            document.getElementById('btn-new-project').onclick = () => this.showNewProjectWizard();
         } else {
             section.innerHTML = `
                 <button class="btn-secondary" id="btn-login">
@@ -588,6 +669,63 @@ export class UIManager {
             }
         };
         container.querySelector('#close-modal').onclick = () => container.classList.add('hidden');
+        lucide.createIcons();
+    }
+
+    showNewProjectWizard() {
+        const modal = document.getElementById('modal-container');
+        modal.classList.remove('hidden');
+        modal.innerHTML = `
+            <div class="modal">
+                <h3 class="modal-title">Configurar Novo Projeto</h3>
+                <div class="modal-body">
+                    <div class="prop-group">
+                        <label>Nome do Projeto</label>
+                        <input type="text" id="wiz-name" value="Residência Silva" placeholder="Ex: Projeto CFTV Centro">
+                    </div>
+                    <div class="prop-group">
+                        <label>Cliente</label>
+                        <input type="text" id="wiz-client" placeholder="Ex: João da Silva">
+                    </div>
+                    <div class="grid-2">
+                        <div class="prop-group">
+                            <label>Largura (m)</label>
+                            <input type="number" id="wiz-w" value="50">
+                        </div>
+                        <div class="prop-group">
+                            <label>Altura (m)</label>
+                            <input type="number" id="wiz-h" value="30">
+                        </div>
+                    </div>
+                    <p class="panel-desc">Você poderá alterar estas informações depois nas configurações.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-ghost" id="wiz-cancel">Cancelar</button>
+                    <button class="btn-primary" id="wiz-confirm">Iniciar Projeto</button>
+                </div>
+            </div>
+        `;
+
+        modal.querySelector('#wiz-cancel').onclick = () => modal.classList.add('hidden');
+        modal.querySelector('#wiz-confirm').onclick = () => {
+            const name = modal.querySelector('#wiz-name').value;
+            const client = modal.querySelector('#wiz-client').value;
+            const w = parseInt(modal.querySelector('#wiz-w').value);
+            const h = parseInt(modal.querySelector('#wiz-h').value);
+
+            this.projects.clear();
+            this.projects.updateMetadata({ name, client });
+            this.projects.updateSettings({ widthMeters: w, heightMeters: h });
+            
+            this.engine.offsetX = 50;
+            this.engine.offsetY = 50;
+            this.engine.zoom = 1;
+            this.engine.drawGrid();
+            this.engine.render();
+            
+            modal.classList.add('hidden');
+            lucide.createIcons();
+        };
         lucide.createIcons();
     }
 

@@ -103,9 +103,18 @@ export class ProjectManager {
 
     clear() {
         this.saveState();
+        this.id = null; // Clear cloud ID for new project
         this.cameras = [];
         this.walls = [];
         this.labels = [];
+        this.metadata = {
+            name: "Novo Projeto",
+            client: "",
+            address: "",
+            company: "Sua Empresa",
+            contact: "seu-site.com.br",
+            date: new Date().toISOString()
+        };
         this.notifyChange();
     }
 
