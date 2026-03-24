@@ -153,6 +153,7 @@ export class UIManager {
                         if (s.type === 'camera') window.app.project.cameras = window.app.project.cameras.filter(c => c !== s.entity);
                         else if (s.type === 'wall') window.app.project.walls = window.app.project.walls.filter(w => w !== s.entity);
                         else if (s.type === 'label') window.app.project.labels = window.app.project.labels.filter(l => l !== s.entity);
+                        else if (s.type === 'obstacle') window.app.project.obstacles = window.app.project.obstacles.filter(o => o !== s.entity);
                     });
                     engine.selectedEntities = [];
                     window.app.project.notifyChange();
@@ -277,6 +278,49 @@ export class UIManager {
                     <i data-lucide="trash-2"></i> Excluir Texto
                 </button>
             `;
+        } else if (hit.type === 'obstacle') {
+            const types = [
+                { id: 'tree', name: 'Árvore', icon: 'tree-pine' },
+                { id: 'bush', name: 'Arbusto', icon: 'leaf' },
+                { id: 'post', name: 'Poste', icon: 'map-pin' },
+                { id: 'box', name: 'Caixa/Obstáculo', icon: 'box' },
+            ];
+            
+            pnl.innerHTML = `
+                <h3 class="panel-title">Editar Objeto Livre</h3>
+                <div class="prop-group">
+                    <label>Tipo de Objeto</label>
+                    <select data-prop="type" class="form-select">
+                        ${types.map(t => `<option value="${t.id}" ${entity.type === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="prop-group">
+                    <label>Tamanho / Raio: <span class="val">${entity.radius}m</span></label>
+                    <input type="range" min="0.1" max="10" step="0.1" value="${entity.radius}" data-prop="radius">
+                </div>
+                <div class="prop-group">
+                    <label>Texto Opcional</label>
+                    <input type="text" value="${entity.text}" data-prop="text" placeholder="Ex: Poste 01">
+                </div>
+                <div class="prop-group" style="flex-direction: row; justify-content: space-between; align-items: center">
+                    <label style="margin:0">Bloquear Visão (Obstáculo)</label>
+                    <input type="checkbox" ${entity.isObstacle ? 'checked' : ''} data-prop="isObstacle" data-type="bool">
+                </div>
+                <div class="property-group">
+                    <label>Cor do Elemento</label>
+                    <div class="color-presets">
+                        <div class="color-opt" style="background:#22c55e" onclick="window.app.ui.updateEntity('color', '34,197,94')"></div>
+                        <div class="color-opt" style="background:#16a34a" onclick="window.app.ui.updateEntity('color', '22,163,74')"></div>
+                        <div class="color-opt" style="background:#94a3b8" onclick="window.app.ui.updateEntity('color', '148,163,184')"></div>
+                        <div class="color-opt" style="background:#475569" onclick="window.app.ui.updateEntity('color', '71,85,105')"></div>
+                        <div class="color-opt" style="background:#f59e0b" onclick="window.app.ui.updateEntity('color', '245,158,11')"></div>
+                        <div class="color-opt" style="background:#ef4444" onclick="window.app.ui.updateEntity('color', '239,68,68')"></div>
+                    </div>
+                </div>
+                <button class="btn-danger-outline" id="btn-delete-entity">
+                    <i data-lucide="trash-2"></i> Excluir Objeto
+                </button>
+            `;
         }
 
         // Listeners for inputs
@@ -300,9 +344,9 @@ export class UIManager {
                 } else if (isBool) {
                     entity[prop] = val;
                 } else {
-                    entity[prop] = (prop === 'name' || prop === 'text') ? val : (prop.includes('rotation') || prop.includes('fov') || prop.includes('range') || prop.includes('fontSize') ? parseInt(val) : val);
+                    entity[prop] = (prop === 'name' || prop === 'text' || prop === 'type') ? val : (prop.includes('rotation') || prop.includes('fov') || prop.includes('range') || prop.includes('fontSize') ? parseInt(val) : (prop === 'radius' ? parseFloat(val) : val));
                     if (e.target.previousElementSibling?.querySelector('.val')) {
-                        e.target.previousElementSibling.querySelector('.val').textContent = `${val}${prop === 'fontSize' ? 'px' : (prop === 'range' ? 'm' : (prop === 'rotation' || prop === 'fov' ? '°' : ''))}`;
+                        e.target.previousElementSibling.querySelector('.val').textContent = `${val}${prop === 'fontSize' ? 'px' : (prop === 'range' || prop === 'radius' ? 'm' : (prop === 'rotation' || prop === 'fov' ? '°' : ''))}`;
                     }
                 }
                 this.engine.render();
@@ -322,6 +366,7 @@ export class UIManager {
                     this.projects.notifyChange();
                 }
                 else if (hit.type === 'label') this.projects.removeLabel(hit.index);
+                else if (hit.type === 'obstacle') this.projects.removeObstacle(hit.index);
                 this.onEntitySelected(null);
                 this.engine.render();
                 this.renderPlacedList();
@@ -582,8 +627,12 @@ export class UIManager {
     }
 
     onProjectUpdate(stats) {
-        document.getElementById('hdr-cams').textContent = stats.cameraCount;
-        document.getElementById('hdr-walls').textContent = stats.wallCount;
+        document.getElementById('hdr-cams').textContent = stats.cameraCount || 0;
+        document.getElementById('hdr-walls').textContent = stats.wallCount || 0;
+        const obstaclesCount = window.app.projects.obstacles.length;
+        if (document.getElementById('hdr-obstacles')) {
+            document.getElementById('hdr-obstacles').textContent = obstaclesCount;
+        }
         this.renderPlacedList();
     }
 
@@ -928,6 +977,7 @@ export class UIManager {
             case 'c': this.setTool('camera'); break;
             case 'r': this.setTool('ruler'); break;
             case 't': this.setTool('text'); break;
+            case 'o': this.setTool('obstacle'); break;
             case 'e': this.setTool('erase'); break;
             case 'm': this.setTool('move'); break;
             case 'escape': 

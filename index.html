@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>CFTV Planner Pro — Projetos Inteligentes</title>
-    <link rel="stylesheet" href="/src/styles/main.css?v=3">
+    <link rel="stylesheet" href="/src/styles/main.css?v=4">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -31,6 +31,10 @@
                     <div class="stat-item" title="Câmeras posicionadas">
                         <i data-lucide="camera"></i>
                         <span id="hdr-cams">0</span>
+                    </div>
+                    <div class="stat-item" title="Obstáculos/Objetos">
+                        <i data-lucide="box"></i>
+                        <span id="hdr-obstacles">0</span>
                     </div>
                     <div class="stat-item" title="Metros de parede">
                         <i data-lucide="buffer"></i>
@@ -96,6 +100,9 @@
                     </button>
                     <button class="tool-btn" id="tool-text" data-tool="text" title="Texto (T)">
                         <i data-lucide="type"></i>
+                    </button>
+                    <button class="tool-btn" id="tool-obstacle" data-tool="obstacle" title="Objeto/Obstáculo (O)">
+                        <i data-lucide="box"></i>
                     </button>
                     <button class="tool-btn" id="tool-erase" data-tool="erase" title="Apagar (E)">
                         <i data-lucide="trash-2"></i>

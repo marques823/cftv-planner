@@ -167,6 +167,16 @@ export class CanvasEngine {
             if (dist < 20 / this.zoom) return { type: 'label', index: i, entity: l };
         }
 
+        // Check obstacles
+        for (let i = this.project.obstacles.length - 1; i >= 0; i--) {
+            const o = this.project.obstacles[i];
+            const dx = o.x - wx;
+            const dy = o.y - wy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const radius = (o.radius || 0.5) * 10;
+            if (dist < Math.max(radius, 15 / this.zoom)) return { type: 'obstacle', index: i, entity: o };
+        }
+
         return null;
     }
 
@@ -381,7 +391,17 @@ export class CanvasEngine {
                 text: 'Nova Anotação'
             });
             this.project.addLabel(newLabel);
-            this.selectedEntities = [{ type: 'label', index: this.project.labels.length - 1, entity: newLabel }];
+            window.app.ui.onEntitySelected(this.selectedEntities[0]);
+        } else if (tool === 'obstacle') {
+            const newObs = new Obstacle({
+                x: worldPos.x,
+                y: worldPos.y,
+                type: 'tree',
+                radius: 1,
+                isObstacle: true
+            });
+            this.project.addObstacle(newObs);
+            this.selectedEntities = [{ type: 'obstacle', index: this.project.obstacles.length - 1, entity: newObs }];
             window.app.ui.onEntitySelected(this.selectedEntities[0]);
         } else if (tool === 'door' || tool === 'window') {
             if (this.previewElement) {
@@ -413,6 +433,7 @@ export class CanvasEngine {
                 if (hit.type === 'camera') this.project.removeCamera(hit.index);
                 else if (hit.type === 'wall') this.project.removeWall(hit.index);
                 else if (hit.type === 'label') this.project.removeLabel(hit.index);
+                else if (hit.type === 'obstacle') this.project.removeObstacle(hit.index);
                 this.selectedEntities = [];
                 window.app.ui.onEntitySelected(null);
             }
@@ -448,7 +469,7 @@ export class CanvasEngine {
                 // Store initial offsets for all selected entities
                 this.dragOffsets = this.selectedEntities.map(s => {
                     const off = {};
-                    if (s.type === 'camera' || s.type === 'label') {
+                    if (s.type === 'camera' || s.type === 'label' || s.type === 'obstacle') {
                         off.x = worldPos.x - s.entity.x;
                         off.y = worldPos.y - s.entity.y;
                     } else if (s.type === 'wall' || s.type === 'wall-endpoint') {
@@ -553,7 +574,7 @@ export class CanvasEngine {
         if (this.isDragging && this.selectedEntities.length > 0) {
             this.selectedEntities.forEach((s, idx) => {
                 const off = this.dragOffsets[idx];
-                if (s.type === 'camera') {
+                if (s.type === 'camera' || s.type === 'obstacle') {
                     s.entity.x = this.snap(worldPos.x - off.x);
                     s.entity.y = this.snap(worldPos.y - off.y);
                 } else if (s.type === 'label') {
@@ -943,8 +964,14 @@ export class CanvasEngine {
         this.project.cameras.forEach(c => {
             const isSelected = this.selectedEntities.some(s => s.entity === c);
             const isHovered = this.hoveredEntity?.entity === c;
-            c.drawFOV(ctx, this.zoom, isSelected, this.project.walls);
+            c.drawFOV(ctx, this.zoom, isSelected, this.project.walls, this.project.obstacles);
             c.draw(ctx, this.zoom, isSelected, isHovered);
+        });
+
+        this.project.obstacles.forEach(o => {
+            const isSelected = this.selectedEntities.some(s => s.entity === o);
+            const isHovered = this.hoveredEntity?.entity === o;
+            o.draw(ctx, this.zoom, isSelected, isHovered);
         });
 
         this.project.labels.forEach(l => {
