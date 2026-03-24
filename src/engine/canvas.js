@@ -170,6 +170,41 @@ export class CanvasEngine {
         return null;
     }
 
+    getSnapPoint(wx, wy, excludeWall = null) {
+        const snapRadius = 20 / this.zoom;
+        for (const w of this.project.walls) {
+            if (w === excludeWall) continue;
+            const d1 = Math.sqrt((w.x1 - wx) ** 2 + (w.y1 - wy) ** 2);
+            if (d1 < snapRadius) return { x: w.x1, y: w.y1 };
+            const d2 = Math.sqrt((w.x2 - wx) ** 2 + (w.y2 - wy) ** 2);
+            if (d2 < snapRadius) return { x: w.x2, y: w.y2 };
+        }
+        return null;
+    }
+
+    getAngleSnap(px, py, pivotX, pivotY, interval = 45, threshold = 5) {
+        const dx = px - pivotX;
+        const dy = py - pivotY;
+        const currentAngleRad = Math.atan2(dy, dx);
+        const currentAngleDeg = (currentAngleRad * 180) / Math.PI;
+        
+        // Normalize to 0-360
+        let normAngle = (currentAngleDeg + 360) % 360;
+        
+        // Find nearest interval
+        const snappedAngleDeg = Math.round(normAngle / interval) * interval;
+        
+        if (Math.abs(normAngle - snappedAngleDeg) < threshold || Math.abs(normAngle - (snappedAngleDeg - 360)) < threshold || Math.abs(normAngle - (snappedAngleDeg + 360)) < threshold) {
+            const rad = snappedAngleDeg * Math.PI / 180;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            return {
+                x: pivotX + Math.cos(rad) * dist,
+                y: pivotY + Math.sin(rad) * dist
+            };
+        }
+        return null;
+    }
+
     onPointerDown(e) {
         // Ignore hover events (S-Pen hovering without touching)
         if (e.buttons === 0) return;
@@ -254,6 +289,12 @@ export class CanvasEngine {
                 this.measureEnd = null;
             }
         } else if (tool === 'camera') {
+            if (this.isRotatingNewCamera) {
+                this.isRotatingNewCamera = false;
+                this.rotatingCamera = null;
+                this.render();
+                return;
+            }
             const model = window.app.ui.selectedModel;
             if (model) {
                 const sx = this.snap(worldPos.x);
@@ -382,7 +423,13 @@ export class CanvasEngine {
 
             if (hit) {
                 this.isPanning = false;
-                const alreadySelectedIdx = this.selectedEntities.findIndex(s => s.entity === hit.entity);
+                
+                // When clicking an endpoint of an already selected wall, we want to prioritize that endpoint
+                const alreadySelectedIdx = this.selectedEntities.findIndex(s => 
+                    s.entity === hit.entity && 
+                    s.type === hit.type && 
+                    (s.type !== 'wall-endpoint' || s.which === hit.which)
+                );
 
                 if (isShift) {
                     if (alreadySelectedIdx >= 0) {
@@ -391,6 +438,7 @@ export class CanvasEngine {
                         this.selectedEntities.push(hit);
                     }
                 } else {
+                    // If we didn't hit the exact same thing (including type/which), replace selection
                     if (alreadySelectedIdx < 0) {
                         this.selectedEntities = [hit];
                     }
@@ -512,17 +560,47 @@ export class CanvasEngine {
                     s.entity.x = worldPos.x - off.x;
                     s.entity.y = worldPos.y - off.y;
                 } else if (s.type === 'wall') {
-                    s.entity.x1 = this.snap(worldPos.x - off.x1);
-                    s.entity.y1 = this.snap(worldPos.y - off.y1);
-                    s.entity.x2 = this.snap(worldPos.x - off.x2);
-                    s.entity.y2 = this.snap(worldPos.y - off.y2);
-                } else if (s.type === 'wall-endpoint') {
-                    if (off.which === 'p1') {
-                        s.entity.x1 = this.snap(worldPos.x);
-                        s.entity.y1 = this.snap(worldPos.y);
+                    let nx1 = worldPos.x - off.x1;
+                    let ny1 = worldPos.y - off.y1;
+                    let nx2 = worldPos.x - off.x2;
+                    let ny2 = worldPos.y - off.y2;
+                    
+                    const snap1 = this.getSnapPoint(nx1, ny1, s.entity);
+                    const snap2 = this.getSnapPoint(nx2, ny2, s.entity);
+                    
+                    if (snap1) {
+                        const dx = snap1.x - nx1;
+                        const dy = snap1.y - ny1;
+                        nx1 += dx; ny1 += dy;
+                        nx2 += dx; ny2 += dy;
+                    } else if (snap2) {
+                        const dx = snap2.x - nx2;
+                        const dy = snap2.y - ny2;
+                        nx1 += dx; ny1 += dy;
+                        nx2 += dx; ny2 += dy;
                     } else {
-                        s.entity.x2 = this.snap(worldPos.x);
-                        s.entity.y2 = this.snap(worldPos.y);
+                        nx1 = this.snap(nx1); ny1 = this.snap(ny1);
+                        nx2 = this.snap(nx2); ny2 = this.snap(ny2);
+                    }
+                    s.entity.x1 = nx1;
+                    s.entity.y1 = ny1;
+                    s.entity.x2 = nx2;
+                    s.entity.y2 = ny2;
+                } else if (s.type === 'wall-endpoint') {
+                    let snapped = this.getSnapPoint(worldPos.x, worldPos.y, s.entity);
+                    
+                    // If not snapped to a corner, try snapping to 45 degree angles
+                    if (!snapped) {
+                        const pivot = off.which === 'p1' ? { x: s.entity.x2, y: s.entity.y2 } : { x: s.entity.x1, y: s.entity.y1 };
+                        snapped = this.getAngleSnap(worldPos.x, worldPos.y, pivot.x, pivot.y, 45, 5);
+                    }
+
+                    if (off.which === 'p1') {
+                        s.entity.x1 = snapped ? snapped.x : this.snap(worldPos.x);
+                        s.entity.y1 = snapped ? snapped.y : this.snap(worldPos.y);
+                    } else {
+                        s.entity.x2 = snapped ? snapped.x : this.snap(worldPos.x);
+                        s.entity.y2 = snapped ? snapped.y : this.snap(worldPos.y);
                     }
                 }
             });
@@ -599,11 +677,12 @@ export class CanvasEngine {
             const sy = this.snap(worldPos.y);
             this.mouseWorldPos = { x: sx, y: sy };
             
-            // Apply ortho snap to preview if not close to another snap point
-            const dx = this.mouseWorldPos.x - this.wallStart.x;
-            const dy = this.mouseWorldPos.y - this.wallStart.y;
-            if (Math.abs(dx) < Math.abs(dy) * 0.1) this.mouseWorldPos.x = this.wallStart.x;
-            if (Math.abs(dy) < Math.abs(dx) * 0.1) this.mouseWorldPos.y = this.wallStart.y;
+            // Apply 45-degree angle snap to preview if not snapped to another point
+            const snappedAngle = this.getAngleSnap(this.mouseWorldPos.x, this.mouseWorldPos.y, this.wallStart.x, this.wallStart.y, 45, 10);
+            if (snappedAngle) {
+                this.mouseWorldPos.x = snappedAngle.x;
+                this.mouseWorldPos.y = snappedAngle.y;
+            }
             
             // Alignment guides
             this.alignmentGuides = [];
@@ -671,10 +750,6 @@ export class CanvasEngine {
         this.isSelectionBox = false;
         this.selectionStart = null;
         this.selectionEnd = null;
-        this.isMeasuring = false;
-        this.isDrawingWall = false;
-        this.isRotatingNewCamera = false;
-        this.rotatingCamera = null;
         this.render();
     }
 

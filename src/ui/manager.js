@@ -60,6 +60,9 @@ export class UIManager {
         this.engine.isDrawingWall = false;
         this.engine.wallStart = null;
         this.engine.alignmentGuides = [];
+        this.engine.isMeasuring = false;
+        this.engine.isRotatingNewCamera = false;
+        this.engine.rotatingCamera = null;
         
         // Close sidebar on mobile when a tool is picked
         document.querySelector('.sidebar')?.classList.remove('open');
@@ -201,9 +204,13 @@ export class UIManager {
             `;
         } else if (hit.type === 'wall' || hit.type === 'wall-endpoint') {
             const w = hit.type === 'wall-endpoint' ? hit.entity : entity;
+            const currentLen = Math.sqrt((w.x2 - w.x1) ** 2 + (w.y2 - w.y1) ** 2) / 10;
             pnl.innerHTML = `
                 <h3 class="panel-title">Editar Parede</h3>
-                <p class="panel-desc">Medida: ${Math.sqrt((w.x2 - w.x1) ** 2 + (w.y2 - w.y1) ** 2).toFixed(2)}m</p>
+                <div class="prop-group">
+                    <label>Comprimento (m)</label>
+                    <input type="number" step="0.01" value="${currentLen.toFixed(2)}" data-prop="wallLength">
+                </div>
                 <div class="prop-group" style="flex-direction: row; justify-content: space-between; align-items: center">
                     <label style="margin:0">Exibir Medida</label>
                     <input type="checkbox" ${w.showMeasurements ? 'checked' : ''} onchange="window.app.ui.updateEntity('showMeasurements', this.checked)">
@@ -280,7 +287,12 @@ export class UIManager {
                 const isBool = e.target.getAttribute('data-type') === 'bool';
                 const val = isBool ? e.target.checked : e.target.value;
                 
-                if (prop === 'widthCm') {
+                if (prop === 'wallLength') {
+                    const length = parseFloat(val);
+                    if (!isNaN(length) && length > 0) {
+                        entity.updateLength(length);
+                    }
+                } else if (prop === 'widthCm') {
                     entity.width = parseInt(val) / 100;
                     if (e.target.previousElementSibling?.querySelector('.val')) {
                         e.target.previousElementSibling.querySelector('.val').textContent = `${val}cm`;
@@ -288,7 +300,7 @@ export class UIManager {
                 } else if (isBool) {
                     entity[prop] = val;
                 } else {
-                    entity[prop] = (prop === 'name' || prop === 'text') ? val : parseInt(val);
+                    entity[prop] = (prop === 'name' || prop === 'text') ? val : (prop.includes('rotation') || prop.includes('fov') || prop.includes('range') || prop.includes('fontSize') ? parseInt(val) : val);
                     if (e.target.previousElementSibling?.querySelector('.val')) {
                         e.target.previousElementSibling.querySelector('.val').textContent = `${val}${prop === 'fontSize' ? 'px' : (prop === 'range' ? 'm' : (prop === 'rotation' || prop === 'fov' ? '°' : ''))}`;
                     }

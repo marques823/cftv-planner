@@ -342,6 +342,19 @@ export class Wall {
             ctx.restore();
         }
     }
+
+    updateLength(newLength) {
+        const dx = this.x2 - this.x1;
+        const dy = this.y2 - this.y1;
+        const currentLenPx = Math.sqrt(dx * dx + dy * dy);
+        if (currentLenPx === 0) return;
+
+        const newLenPx = newLength * 10; // 10px = 1m
+        const ratio = newLenPx / currentLenPx;
+
+        this.x2 = this.x1 + dx * ratio;
+        this.y2 = this.y1 + dy * ratio;
+    }
 }
 
 export class TextLabel {
