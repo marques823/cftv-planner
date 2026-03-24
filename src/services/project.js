@@ -140,27 +140,31 @@ export class ProjectManager {
 
     toJSON() {
         return JSON.stringify({
-            id: this.id,
             ...this.metadata,
             cameras: this.cameras,
             walls: this.walls,
             labels: this.labels,
-            settings: this.settings
+            settings: this.settings,
+            id: this.id // Place at the end to ensure it's not overwritten by spread
         });
     }
 
     async save(userId = null) {
         const data = JSON.parse(this.toJSON());
+        console.log('Iniciando salvamento. ID atual:', this.id);
         if (userId) {
             try {
                 const { saveProjectToCloud } = await import('./supabase.js');
                 const res = await saveProjectToCloud(data, userId, this.id);
+                console.log('Resposta do Supabase:', res);
                 // Supabase .select() returns an array
                 if (res.data?.[0]?.id) {
                     this.id = res.data[0].id;
+                    console.log('ID do projeto atualizado para:', this.id);
                 }
             } catch (err) {
                 console.error('Erro ao salvar na nuvem:', err);
+                alert('Erro ao salvar: ' + err.message);
             }
         }
         localStorage.setItem('cftv_project_latest', this.toJSON());
