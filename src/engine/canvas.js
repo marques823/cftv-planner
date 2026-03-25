@@ -248,7 +248,11 @@ export class CanvasEngine {
         // Ignore hover events (S-Pen hovering without touching)
         if (e.buttons === 0) return;
 
+        // Capture pointer to ensure we receive pointermove/up even if S-Pen leaves bounds
+        try { this.mainCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+
         this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
+
         
         const rect = this.mainCanvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
@@ -643,6 +647,12 @@ export class CanvasEngine {
         }
 
         if (this.isDrawingFreehand && this.currentDrawing) {
+            // Safety fallback: if S-Pen hovers off screen and misses pointercancel, abort gracefully
+            if (e.buttons === 0) {
+                this.onPointerUp(e);
+                return;
+            }
+
             let point = { x: worldPos.x, y: worldPos.y };
             const points = this.currentDrawing.points;
             this.isAngleSnapped = false;
@@ -858,6 +868,8 @@ export class CanvasEngine {
     }
 
     onPointerUp(e) {
+        try { this.mainCanvas.releasePointerCapture(e.pointerId); } catch (err) {}
+        
         if (this.isSnapshotMode) return;
 
         if (this.isDrawingFreehand && this.currentDrawing) {
