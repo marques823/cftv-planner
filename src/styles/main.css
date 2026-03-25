@@ -600,7 +600,20 @@ canvas {
   padding: 0 16px;
   font-size: 11px;
   color: var(--text-dim);
+  white-space: nowrap;
+  gap: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.app-status::-webkit-scrollbar { display: none; }
+
+.app-status > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 
 .pulse-indicator {
   width: 8px;
