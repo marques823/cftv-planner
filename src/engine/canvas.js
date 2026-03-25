@@ -869,6 +869,7 @@ export class CanvasEngine {
 
     onPointerUp(e) {
         try { this.mainCanvas.releasePointerCapture(e.pointerId); } catch (err) {}
+        this.pointers.delete(e.pointerId);
         
         if (this.isSnapshotMode) return;
 
@@ -886,7 +887,6 @@ export class CanvasEngine {
             this.currentDrawing = null;
             this.isAngleSnapped = false;
             this.render();
-            return;
         }
 
         if (this.isSelectionBox && this.selectionStart && this.selectionEnd) {
@@ -924,7 +924,6 @@ export class CanvasEngine {
             window.app.ui.onEntitySelected(this.selectedEntities.length === 1 ? this.selectedEntities[0] : { type: 'multiple', count: this.selectedEntities.length });
         }
 
-        this.pointers.delete(e.pointerId);
         if (this.pointers.size < 2) {
             this.lastMidX = null;
             this.lastMidY = null;
