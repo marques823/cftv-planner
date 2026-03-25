@@ -131,23 +131,54 @@ body {
 
 /* BOM Modal Styles */
 .bom-modal {
-  max-width: 900px;
-  width: 95%;
+  max-width: 1000px;
+  width: min(95vw, 1200px);
   max-height: 90vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-sidebar);
-  border-radius: 12px;
+  border-radius: 16px;
   border: 1px solid var(--border);
-  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  animation: modalSlideUp 0.3s ease-out;
+}
+
+@keyframes modalSlideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .bom-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 16px;
+  background: var(--bg-card);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.bom-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+@media (max-width: 600px) {
+  .bom-modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  .bom-header, .bom-footer {
+    padding: 12px 16px;
+    border-radius: 0;
+  }
+  .bom-content {
+    padding: 16px;
+  }
 }
 
 .bom-category {
@@ -164,44 +195,79 @@ body {
   gap: 8px;
 }
 
+.bom-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+}
+
 .bom-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  min-width: 800px; /* Encourages side-scrolling for data clarity */
 }
 
 .bom-table th {
   text-align: left;
-  padding: 8px;
+  padding: 12px 12px;
   border-bottom: 2px solid var(--border);
-  color: var(--text-dim);
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(255,255,255,0.02);
+}
+
+.bom-table tr:hover {
+  background: rgba(255,255,255,0.03);
 }
 
 .bom-table td {
-  padding: 8px;
+  padding: 12px 12px;
   border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
 }
 
-.bom-table input {
+.bom-table input[type="number"] {
   background: var(--bg-app);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 4px;
-  border-radius: 4px;
-  width: 60px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  width: 100%;
+  max-width: 65px;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: center;
 }
 
 .bom-table .price-input {
-  width: 80px;
+  max-width: 100px;
+}
+
+.bom-table .stock-chk {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
 }
 
 .bom-footer {
-  margin-top: 32px;
+  padding: 16px 24px;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 12px;
+  flex-wrap: wrap; /* Allow buttons to wrap on mobile */
   border-top: 1px solid var(--border);
-  padding-top: 16px;
+  background: var(--bg-card);
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+}
+
+.total-geral {
+  flex: 1;
+  min-width: 200px;
 }
 
 .total-row {
@@ -837,12 +903,6 @@ canvas {
     display: flex;
   }
 
-  /* Header shrink to save vertical space */
-  .app-header {
-    padding: 0 12px;
-    height: 52px;
-  }
-
   /* Hide logo subtitle and stats on small screens */
   .logo-subtitle,
   .header-center,
@@ -851,8 +911,28 @@ canvas {
     display: none;
   }
 
-  .header-left, 
+  /* Header: single-rule so no cascade conflict */
+  .app-header {
+    padding: 0 8px;
+    height: 52px;
+    justify-content: flex-start !important; /* Must override base space-between */
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+  }
+  .app-header::-webkit-scrollbar { display: none; }
+
+  .header-left {
+    flex-shrink: 0;
+    gap: 4px;
+  }
+  .header-center {
+    flex-shrink: 0;
+  }
   .header-right {
+    margin-left: auto;
+    flex-shrink: 0;
     gap: 4px;
   }
 
@@ -877,22 +957,33 @@ canvas {
 
   /* Floating Tools alignment for mobile */
   .floating-tools {
-    left: 12px;
-    padding: 6px;
-    gap: 4px;
+    left: 8px;
+    padding: 4px;
+    gap: 2px;
+    max-height: calc(100dvh - 80px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
   }
-  
+  .floating-tools::-webkit-scrollbar { display: none; }
+
   .floating-tools .tool-grid.vertical {
-    gap: 6px;
+    gap: 3px;
   }
   
   .floating-tools .drag-handle {
     margin-bottom: 2px;
+    padding: 2px 0;
   }
   
   .floating-tools .tool-btn {
-    width: 38px;
-    height: 38px;
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+  .floating-tools .tool-btn i {
+    width: 14px;
+    height: 14px;
   }
 
   /* Canvas fills 100% of the available flex space */

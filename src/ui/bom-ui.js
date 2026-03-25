@@ -31,17 +31,44 @@ export class BOMManager {
         // Generate base BOM from engine
         const baseBOM = generateBOM(this.project);
         
-        // Apply overrides
+        // Track which overrides have been applied
+        const appliedOverrides = new Set();
+
+        // Apply overrides to existing items
         baseBOM.forEach(cat => {
             cat.items.forEach(item => {
-                const ovr = this.overrides[item.description]; // Using description as key for simplicity since IDs are random
+                const ovr = this.overrides[item.description];
                 if (ovr) {
                     if (ovr.qty !== undefined) item.qty = ovr.qty;
                     if (ovr.unitPrice !== undefined) item.unitPrice = ovr.unitPrice;
                     if (ovr.inStock !== undefined) item.inStock = ovr.inStock;
+                    appliedOverrides.add(item.description);
                 }
             });
         });
+
+        // Add manual items that weren't in the base BOM
+        const manualItems = [];
+        Object.entries(this.overrides).forEach(([desc, ovr]) => {
+            if (!appliedOverrides.has(desc)) {
+                manualItems.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    description: desc,
+                    qty: ovr.qty || 1,
+                    unit: 'un',
+                    reference: 'MANUAL',
+                    unitPrice: ovr.unitPrice || 0,
+                    inStock: ovr.inStock || false
+                });
+            }
+        });
+
+        if (manualItems.length > 0) {
+            baseBOM.push({
+                name: "7. ITENS MANUAIS / ADICIONAIS",
+                items: manualItems
+            });
+        }
 
         this.bom = baseBOM;
     }
@@ -70,32 +97,34 @@ export class BOMManager {
                     ${this.bom.map(cat => `
                         <section class="bom-category">
                             <h3>${cat.name}</h3>
-                            <table class="bom-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 40px">Est.</th>
-                                        <th>Descrição</th>
-                                        <th style="width: 60px">Qtd</th>
-                                        <th>Unid</th>
-                                        <th>Referência</th>
-                                        <th>Preço Un.</th>
-                                        <th>Subtotal</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${cat.items.map(item => `
-                                        <tr data-id="${item.id}" data-desc="${item.description}">
-                                            <td><input type="checkbox" class="stock-chk" ${item.inStock ? 'checked' : ''}></td>
-                                            <td>${item.description}</td>
-                                            <td><input type="number" class="qty-input" value="${item.qty}"></td>
-                                            <td>${item.unit}</td>
-                                            <td><span class="text-dim">${item.reference}</span></td>
-                                            <td>R$ <input type="number" step="0.01" class="price-input" value="${item.unitPrice || ''}"></td>
-                                            <td class="subtotal">R$ ${((item.unitPrice || 0) * item.qty).toFixed(2)}</td>
+                            <div class="bom-table-wrapper">
+                                <table class="bom-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40px">Est.</th>
+                                            <th>Descrição</th>
+                                            <th style="width: 60px">Qtd</th>
+                                            <th>Unid</th>
+                                            <th>Referência</th>
+                                            <th>Preço Un.</th>
+                                            <th>Subtotal</th>
                                         </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        ${cat.items.map(item => `
+                                            <tr data-id="${item.id}" data-desc="${item.description}">
+                                                <td><input type="checkbox" class="stock-chk" ${item.inStock ? 'checked' : ''}></td>
+                                                <td>${item.description}</td>
+                                                <td><input type="number" class="qty-input" value="${item.qty}"></td>
+                                                <td>${item.unit}</td>
+                                                <td><span class="text-dim">${item.reference}</span></td>
+                                                <td>R$ <input type="number" step="0.01" class="price-input" value="${item.unitPrice || ''}"></td>
+                                                <td class="subtotal">R$ ${((item.unitPrice || 0) * item.qty).toFixed(2)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
                         </section>
                     `).join('')}
                 </div>

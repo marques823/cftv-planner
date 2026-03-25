@@ -29,7 +29,7 @@ export function generateBOM(project) {
             notes: "Câmera posicionada no projeto"
         });
 
-        const isExternal = cam.type.toLowerCase().includes('bullet');
+        const isExternal = cam.type && cam.type.toLowerCase().includes('bullet');
         if (isExternal) {
             addItem(categories[0], {
                 description: "Protetor Solar / Housing para Câmera Externa",
@@ -58,7 +58,7 @@ export function generateBOM(project) {
             notes: "4 unidades por câmera"
         });
         
-        const extCount = cameras.filter(c => c.type.toLowerCase().includes('bullet')).length;
+        const extCount = cameras.filter(c => c.type && c.type.toLowerCase().includes('bullet')).length;
         if (extCount > 0) {
             addItem(categories[1], {
                 description: "Caixa de Passagem VDI/CFTV (Sobrepor)",
