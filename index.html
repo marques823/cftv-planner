@@ -324,6 +324,7 @@
         document.addEventListener('touchmove', drag, {passive: false});
         document.addEventListener('mouseup', dragEnd);
         document.addEventListener('touchend', dragEnd);
+        document.addEventListener('touchcancel', dragEnd);
       }
 
       function drag(e) {
@@ -352,6 +353,7 @@
         document.removeEventListener('touchmove', drag);
         document.removeEventListener('mouseup', dragEnd);
         document.removeEventListener('touchend', dragEnd);
+        document.removeEventListener('touchcancel', dragEnd);
       }
     </script>
 </body>
