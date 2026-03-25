@@ -915,7 +915,11 @@ canvas {
   .app-header {
     padding: 0 8px;
     height: 52px;
-    justify-content: flex-start !important; /* Must override base space-between */
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0; /* Override flex min-width: auto */
+    box-sizing: border-box;
+    justify-content: flex-start !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
