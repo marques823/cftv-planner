@@ -1,4 +1,4 @@
-import { Camera, Wall, TextLabel, Obstacle, FreeDraw } from './entities.js';
+import { Camera, Wall, TextLabel, Obstacle, FreeDraw, Cable, Rack } from './entities.js';
 
 const SCALE = 10; // 10px = 1m
 
@@ -432,17 +432,30 @@ export class CanvasEngine {
             });
             this.project.addLabel(newLabel);
             window.app.ui.onEntitySelected(this.selectedEntities[0]);
-        } else if (tool === 'obstacle') {
-            const newObs = new Obstacle({
+        } else if (tool === 'obstacle' || tool === 'rack') {
+            const isRack = tool === 'rack';
+            const obs = isRack ? new Rack({
+                x: worldPos.x,
+                y: worldPos.y,
+                uSize: 12
+            }) : new Obstacle({
                 x: worldPos.x,
                 y: worldPos.y,
                 type: 'tree',
                 radius: 1,
                 isObstacle: true
             });
-            this.project.addObstacle(newObs);
-            this.selectedEntities = [{ type: 'obstacle', index: this.project.obstacles.length - 1, entity: newObs }];
+            this.project.addObstacle(obs);
+            this.selectedEntities = [{ type: 'obstacle', index: this.project.obstacles.length - 1, entity: obs }];
             window.app.ui.onEntitySelected(this.selectedEntities[0]);
+        } else if (tool === 'cable') {
+            this.isDrawingFreehand = true;
+            this.currentDrawing = new Cable({
+                points: [worldPos],
+                color: '245,158,11', // Amber/Orange
+                lineWidth: 3
+            });
+            // Removed redundant addDrawing here; it will be added on pointerUp after smoothing
         } else if (tool === 'door' || tool === 'window') {
             if (this.previewElement) {
                 this.project.saveState();
@@ -514,6 +527,9 @@ export class CanvasEngine {
                     if (s.type === 'camera' || s.type === 'label' || s.type === 'obstacle') {
                         off.x = worldPos.x - s.entity.x;
                         off.y = worldPos.y - s.entity.y;
+                    } else if (s.type === 'drawing' || s.type === 'cable') {
+                        off.x = worldPos.x;
+                        off.y = worldPos.y;
                     } else if (s.type === 'wall' || s.type === 'wall-endpoint') {
                         off.x1 = worldPos.x - (s.entity.x1 || 0);
                         off.y1 = worldPos.y - (s.entity.y1 || 0);
@@ -627,10 +643,36 @@ export class CanvasEngine {
         }
 
         if (this.isDrawingFreehand && this.currentDrawing) {
-            const lastPoint = this.currentDrawing.points[this.currentDrawing.points.length - 1];
-            const dist = Math.sqrt((worldPos.x - lastPoint.x) ** 2 + (worldPos.y - lastPoint.y) ** 2);
-            if (dist > 2 / this.zoom) {
-                this.currentDrawing.points.push({ x: worldPos.x, y: worldPos.y });
+            let point = { x: worldPos.x, y: worldPos.y };
+            const points = this.currentDrawing.points;
+            this.isAngleSnapped = false;
+
+            if (points.length > 0) {
+                const lastPoint = points[points.length - 1];
+                const dx = point.x - lastPoint.x;
+                const dy = point.y - lastPoint.y;
+                const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                const snappedAngle = Math.round(angle / 45) * 45;
+                
+                if (Math.abs(angle - snappedAngle) < 10) {
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const rad = snappedAngle * Math.PI / 180;
+                    point.x = lastPoint.x + Math.cos(rad) * dist;
+                    point.y = lastPoint.y + Math.sin(rad) * dist;
+                    this.isAngleSnapped = true;
+                    this.snapAngleValue = snappedAngle;
+                }
+            }
+
+            const lastPointForDist = points[points.length - 1];
+            const dist = Math.sqrt((point.x - lastPointForDist.x) ** 2 + (point.y - lastPointForDist.y) ** 2);
+            
+            // Refinement: If snapped, replaced the last point instead of appending to avoid "point bleed"
+            if (this.isAngleSnapped && points.length > 1) {
+                points[points.length - 1] = point;
+                this.render();
+            } else if (dist > 5 / this.zoom) {
+                this.currentDrawing.addPoint(point);
                 this.render();
             }
             return;
@@ -819,6 +861,10 @@ export class CanvasEngine {
         if (this.isSnapshotMode) return;
 
         if (this.isDrawingFreehand && this.currentDrawing) {
+            if (this.currentDrawing.points.length > 2) {
+                // Apply Chaikin smoothing
+                this.currentDrawing.points = this.applyChaikin(this.currentDrawing.points, 2, 0.25);
+            }
             if (this.currentDrawing.points.length > 1) {
                 this.project.addDrawing(this.currentDrawing);
                 this.selectedEntities = [{ type: 'drawing', index: this.project.drawings.length - 1, entity: this.currentDrawing }];
@@ -826,6 +872,7 @@ export class CanvasEngine {
             }
             this.isDrawingFreehand = false;
             this.currentDrawing = null;
+            this.isAngleSnapped = false;
             this.render();
             return;
         }
@@ -1118,5 +1165,30 @@ export class CanvasEngine {
         }
         
         ctx.restore();
+    }
+    applyChaikin(points, iterations = 2, tension = 0.25) {
+        if (points.length < 3) return points;
+        let newPoints = [...points];
+        for (let i = 0; i < iterations; i++) {
+            const nextPoints = [];
+            nextPoints.push(newPoints[0]);
+            for (let j = 0; j < newPoints.length - 1; j++) {
+                const p1 = newPoints[j];
+                const p2 = newPoints[j+1];
+                
+                const q = {
+                    x: p1.x + tension * (p2.x - p1.x),
+                    y: p1.y + tension * (p2.y - p1.y)
+                };
+                const r = {
+                    x: p1.x + (1 - tension) * (p2.x - p1.x),
+                    y: p1.y + (1 - tension) * (p2.y - p1.y)
+                };
+                nextPoints.push(q, r);
+            }
+            nextPoints.push(newPoints[newPoints.length - 1]);
+            newPoints = nextPoints;
+        }
+        return newPoints;
     }
 }

@@ -1,5 +1,6 @@
 import { CATALOG } from '../engine/catalog.js';
 import { AuthService } from '../services/auth.js';
+import { BOMManager } from './bom-ui.js';
 
 export class UIManager {
     constructor(engine, projects) {
@@ -10,6 +11,7 @@ export class UIManager {
         this.selectedModel = CATALOG[0];
         this.brandFilter = 'all';
         this.inspectorAutoOpen = false;
+        this.bom = new BOMManager(projects);
     }
 
     async init() {
@@ -18,7 +20,9 @@ export class UIManager {
         this.setupSettingsActions();
         this.setupMetadataActions();
         this.setupThemeToggle();
+        this.setupFullscreen();
         this.setupInspectorToggle();
+        this.setupBOMActions();
         this.renderCatalog();
         this.setupCatalogFilters();
         
@@ -65,6 +69,8 @@ export class UIManager {
         this.engine.isMeasuring = false;
         this.engine.isRotatingNewCamera = false;
         this.engine.rotatingCamera = null;
+        this.engine.isDrawingFreehand = false;
+        this.engine.currentDrawing = null;
         
         // Close sidebar on mobile when a tool is picked
         document.querySelector('.sidebar')?.classList.remove('open');
@@ -299,8 +305,9 @@ export class UIManager {
             `;
         } else if (hit.type === 'obstacle' || hit.type === 'drawing') {
             const isDrawing = hit.type === 'drawing';
+            const isCable = isDrawing && entity.type === 'cable';
             const isObstacle = hit.type === 'obstacle';
-            const title = isDrawing ? 'Editar Desenho' : (isObstacle ? 'Editar Objeto Livre' : 'Editar Texto');
+            const title = isCable ? 'Editar Cabo' : (isDrawing ? 'Editar Desenho' : (isObstacle ? 'Editar Objeto Livre' : 'Editar Texto'));
             
             pnl.innerHTML = `
                 <h3 class="panel-title">${title}</h3>
@@ -322,13 +329,24 @@ export class UIManager {
                 
                 ${isDrawing ? `
                 <div class="prop-group">
-                    <label>Espessura do Traço: <span class="val">${entity.lineWidth}px</span></label>
+                    <label>Espessura: <span class="val">${entity.lineWidth}px</span></label>
                     <input type="range" min="1" max="20" step="1" value="${entity.lineWidth}" data-prop="lineWidth">
                 </div>
+                <div class="prop-group">
+                    <label>Transparência: <span class="val">${entity.opacity !== undefined ? entity.opacity : 70}%</span></label>
+                    <input type="range" min="0" max="100" step="5" value="${entity.opacity !== undefined ? entity.opacity : 70}" data-prop="opacity">
+                </div>
+                ${isCable ? `
+                <div class="prop-group">
+                    <label>✏️ Comprimento real (m) — sobrescreve o calculado</label>
+                    <input type="number" step="0.1" value="${entity.manualLength || entity.getLength().toFixed(2)}" data-prop="manualLength" placeholder="Automático">
+                </div>
+                ` : `
                 <div class="prop-group" style="flex-direction: row; justify-content: space-between; align-items: center">
                     <label style="margin:0">Bloquear Visão (Obstáculo)</label>
                     <input type="checkbox" ${entity.isObstacle ? 'checked' : ''} data-prop="isObstacle" data-type="bool">
                 </div>
+                `}
                 ` : `
                 <div class="prop-group">
                     <label>${isObstacle ? 'Texto Opcional' : 'Conteúdo do Texto'}</label>
@@ -355,7 +373,7 @@ export class UIManager {
                     </div>
                 </div>
                 <button class="btn-danger-outline" id="btn-delete-entity">
-                    <i data-lucide="trash-2"></i> Excluir ${isDrawing ? 'Desenho' : (isObstacle ? 'Objeto' : 'Texto')}
+                    <i data-lucide="trash-2"></i> Excluir ${isCable ? 'Cabo' : (isDrawing ? 'Desenho' : (isObstacle ? 'Objeto' : 'Texto'))}
                 </button>
             `;
         }
@@ -373,6 +391,9 @@ export class UIManager {
                     if (!isNaN(length) && length > 0) {
                         entity.updateLength(length);
                     }
+                } else if (prop === 'manualLength') {
+                    const len = parseFloat(val);
+                    entity.manualLength = isNaN(len) || len <= 0 ? null : len;
                 } else if (prop === 'widthCm') {
                     entity.width = parseInt(val) / 100;
                     if (e.target.previousElementSibling?.querySelector('.val')) {
@@ -381,9 +402,9 @@ export class UIManager {
                 } else if (isBool) {
                     entity[prop] = val;
                 } else {
-                    entity[prop] = (prop === 'name' || prop === 'text' || prop === 'type') ? val : (prop.includes('rotation') || prop.includes('fov') || prop.includes('range') || prop.includes('fontSize') || prop.includes('lineWidth') ? parseInt(val) : (prop === 'radius' ? parseFloat(val) : val));
+                    entity[prop] = (prop === 'name' || prop === 'text' || prop === 'type') ? val : (prop.includes('rotation') || prop.includes('fov') || prop.includes('range') || prop.includes('fontSize') || prop.includes('lineWidth') || prop.includes('opacity') ? parseInt(val) : (prop === 'radius' ? parseFloat(val) : val));
                     if (e.target.previousElementSibling?.querySelector('.val')) {
-                        e.target.previousElementSibling.querySelector('.val').textContent = `${val}${prop === 'fontSize' || prop === 'lineWidth' ? 'px' : (prop === 'range' || prop === 'radius' ? 'm' : (prop === 'rotation' || prop === 'fov' ? '°' : ''))}`;
+                        e.target.previousElementSibling.querySelector('.val').textContent = `${val}${prop === 'fontSize' || prop === 'lineWidth' ? 'px' : (prop === 'opacity' ? '%' : (prop === 'range' || prop === 'radius' ? 'm' : (prop === 'rotation' || prop === 'fov' ? '°' : '')))}`;
                     }
                 }
                 this.engine.render();
@@ -714,6 +735,14 @@ export class UIManager {
         });
     }
 
+    setupBOMActions() {
+        const btn = document.getElementById('btn-bom');
+        btn?.addEventListener('click', () => {
+             console.log('BOM button clicked');
+             window.dispatchEvent(new CustomEvent('open-bom'));
+        });
+    }
+
     onProjectUpdate(stats) {
         document.getElementById('hdr-cams').textContent = stats.cameraCount || 0;
         document.getElementById('hdr-walls').textContent = stats.wallCount || 0;
@@ -778,6 +807,38 @@ export class UIManager {
             lucide.createIcons();
             this.engine.drawGrid();
             this.engine.render();
+        });
+    }
+
+    setupFullscreen() {
+        const btn = document.getElementById('btn-fullscreen');
+        if (!btn) return;
+
+        const updateIcon = () => {
+            const isFS = !!document.fullscreenElement;
+            btn.innerHTML = isFS
+                ? '<i data-lucide="minimize-2"></i>'
+                : '<i data-lucide="maximize-2"></i>';
+            btn.title = isFS ? 'Sair da tela cheia (Esc)' : 'Tela cheia (F11)';
+            lucide.createIcons();
+        };
+
+        btn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen?.().catch(() => {});
+            } else {
+                document.exitFullscreen?.();
+            }
+        });
+
+        document.addEventListener('fullscreenchange', updateIcon);
+
+        // Also wire F11 shortcut
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'F11') {
+                e.preventDefault();
+                btn.click();
+            }
         });
     }
 
@@ -1066,6 +1127,8 @@ export class UIManager {
             case 'r': this.setTool('ruler'); break;
             case 't': this.setTool('text'); break;
             case 'o': this.setTool('obstacle'); break;
+            case 'l': this.setTool('cable'); break;
+            case 'r': this.setTool('rack'); break;
             case 'd': this.setTool('draw'); break;
             case 'e': this.setTool('erase'); break;
             case 'm': this.setTool('move'); break;

@@ -1,6 +1,6 @@
 import { saveProjectToCloud } from './supabase.js';
 import { HistoryManager } from './history.js';
-import { Camera, Wall, TextLabel, Obstacle, FreeDraw } from '../engine/entities.js';
+import { Camera, Wall, TextLabel, Obstacle, FreeDraw, Cable, Rack } from '../engine/entities.js';
 
 export class ProjectManager {
     constructor() {
@@ -242,8 +242,8 @@ export class ProjectManager {
             this.cameras = (data.cameras || []).map(c => new Camera(c));
             this.walls = (data.walls || []).map(w => new Wall(w.x1, w.y1, w.x2, w.y2, w.color, w.showMeasurements, w.elements));
             this.labels = (data.labels || []).map(l => new TextLabel(l));
-            this.obstacles = (data.obstacles || []).map(o => new Obstacle(o));
-            this.drawings = (data.drawings || []).map(d => new FreeDraw(d));
+            this.obstacles = (data.obstacles || []).map(o => o.isRack ? new Rack(o) : new Obstacle(o));
+            this.drawings = (data.drawings || []).map(d => d.type === 'cable' ? new Cable(d) : new FreeDraw(d));
             
             this.notifyChange();
         } catch (e) {
