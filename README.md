@@ -2,7 +2,7 @@
 
 Solução profissional para planejamento e design de sistemas de segurança e monitoramento (CFTV). Crie plantas baixas, posicione câmeras com FOV real, trace cabos e gere relatórios e listas de materiais detalhados em segundos.
 
-![Preview](https://cftv.solidsites.dev/preview.png)
+![Preview](https://cftv.solidsites.dev/preview.png) https://cftv.solidsites.dev/
 
 ## 🚀 Funcionalidades Principais
 
